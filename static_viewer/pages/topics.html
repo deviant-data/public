@@ -1,0 +1,144 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>streamlearn · topics</title><style>
+:root{
+  --bg:#0a0e14; --bg-2:#0f141c; --bg-3:#161d28;
+  --ink:#e8ecf1; --ink-soft:#aab3bf; --ink-mute:#6b7684; --ink-low:#3a4554;
+  --cyan:#58e6d9; --amber:#f0a050; --rose:#e85a7a; --green:#5be084; --violet:#a78bff;
+  --grid:rgba(120,200,220,0.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 'Inter Tight',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;opacity:.5}
+header{position:sticky;top:0;z-index:10;background:rgba(10,14,20,.85);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--ink-low);
+  padding:10px 20px;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+header h1{margin:0;font-size:14px;letter-spacing:.05em;font-weight:700}
+header h1 a{color:var(--cyan);text-decoration:none;font-family:'JetBrains Mono',monospace}
+nav{display:flex;gap:14px;flex-wrap:wrap}
+nav a{color:var(--ink-soft);text-decoration:none;font-size:12px;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.04em;text-transform:uppercase}
+nav a:hover{color:var(--cyan)}
+main{max-width:1180px;margin:0 auto;padding:24px 20px 80px;position:relative;z-index:1}
+h2{font-size:24px;font-weight:700;letter-spacing:-.01em;margin:24px 0 12px}
+h3{font-size:16px;font-weight:600;margin:0 0 8px;color:var(--ink)}
+.card{background:var(--bg-2);border:1px solid var(--ink-low);
+  border-radius:4px;padding:18px;margin-bottom:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.overview-grid{display:grid;grid-template-columns:210px 1fr;gap:14px;align-items:start}
+.overview-main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.overview-runs{grid-column:1/-1}
+.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.module-card{text-decoration:none;color:inherit;display:block}
+.module-card p{margin:0;color:var(--ink-soft);font-size:13px}
+.monitor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.monitor-card h3{margin:0 0 6px}
+.monitor-card canvas{width:100%;height:230px;display:block;background:#050810;border:1px solid var(--ink-low);border-radius:3px}
+.monitor-card.wide{grid-column:1/-1}
+.storage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.storage-grid .wide{grid-column:1/-1}
+.ledger-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.ledger-grid .wide{grid-column:1/-1}
+.paired-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:14px;align-items:start}
+.paired-grid .wide{grid-column:1/-1}
+.primary-panel,.secondary-panel{min-width:0}
+.metric-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
+.metric-row span{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-soft);
+  border:1px solid var(--ink-low);background:var(--bg-3);border-radius:3px;padding:3px 7px}
+.counts-rail{position:sticky;top:74px}
+.delta{color:var(--green);font-size:11px}
+.source-summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.source-summary span{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-soft);
+  border:1px solid var(--ink-low);background:var(--bg-2);border-radius:3px;padding:5px 8px}
+.viz-meta{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.viz-meta span{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-soft);
+  border:1px solid var(--ink-low);background:var(--bg-2);border-radius:3px;padding:5px 8px}
+.copy-module{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 14px}
+.copy-section{border:1px solid var(--ink-low);background:rgba(15,20,28,.72);
+  border-radius:4px;padding:12px 14px;min-height:118px}
+.copy-section h3{margin:0 0 7px;color:var(--cyan);font:700 11px 'JetBrains Mono',monospace;
+  letter-spacing:.08em;text-transform:uppercase}
+.copy-section p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.45}
+.mini-chart{width:100%;height:92px;display:block;background:#050810;border:1px solid var(--ink-low);border-radius:3px;margin-top:10px}
+.horizon-bars{display:grid;gap:10px;margin-top:8px}
+.horizon-bar-label{display:flex;justify-content:space-between;gap:12px;color:var(--ink-soft);
+  font:11px 'JetBrains Mono',monospace;text-transform:uppercase}
+.horizon-bar-track{height:9px;background:var(--bg-3);border:1px solid var(--ink-low);border-radius:9px;overflow:hidden}
+.horizon-bar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green))}
+.slider-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.slider-line input[type=range]{accent-color:var(--cyan);min-width:110px}
+.slider-line output{font:12px 'JetBrains Mono',monospace;color:var(--cyan)}
+.viz-card{position:relative;overflow:hidden;padding:0}
+.viz-card canvas,.viz-card svg{width:100%;display:block;background:#050810}
+.viz-tip{position:absolute;left:0;top:0;z-index:4;pointer-events:none;max-width:300px;
+  background:rgba(10,14,20,.94);border:1px solid var(--ink-low);border-radius:4px;
+  color:var(--ink);font:12px 'JetBrains Mono',monospace;padding:7px 9px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);transform:translate(12px,12px)}
+.viz-tip.hidden{display:none}
+.source-url{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);
+  max-width:620px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.table-card{overflow:auto}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;
+  font-family:'JetBrains Mono',monospace}
+.kv dt{color:var(--ink-mute);text-transform:uppercase;font-size:10px;letter-spacing:.1em;padding-top:2px}
+.kv dd{margin:0;color:var(--ink);font-variant-numeric:tabular-nums}
+.kv dd.cyan{color:var(--cyan)}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--ink-low)}
+th{color:var(--ink-mute);font-weight:500;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+tr:hover td{background:var(--bg-3)}
+code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--bg-3);
+  padding:1px 5px;border:1px solid var(--ink-low);border-radius:2px;color:var(--cyan)}
+.muted{color:var(--ink-mute)}
+.empty{padding:32px;text-align:center;color:var(--ink-mute)}
+.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:10px;
+  letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--ink-low);
+  padding:1px 6px;border-radius:2px;color:var(--ink-soft);margin-right:4px}
+.tag.ok{color:var(--green);border-color:rgba(91,224,132,.3)}
+.tag.warn{color:var(--amber);border-color:rgba(240,160,80,.3)}
+.tag.bad{color:var(--rose);border-color:rgba(232,90,122,.3)}
+.bar{position:relative;height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden}
+.bar>span{position:absolute;left:0;top:0;bottom:0;background:var(--cyan)}
+.spark{display:inline-block;vertical-align:middle}
+input[type=text],input[type=search]{background:var(--bg-3);border:1px solid var(--ink-low);
+  color:var(--ink);font:14px 'Inter Tight',sans-serif;padding:8px 12px;border-radius:3px;
+  width:100%;outline:none}
+input[type=text]:focus,input[type=search]:focus{border-color:var(--cyan)}
+/* v5 note: compact replay controls; only pages that render data-replay use it. */
+.replay{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px}
+.replay button,.replay select{background:var(--bg-3);border:1px solid var(--ink-low);
+  color:var(--ink);font:12px 'JetBrains Mono',monospace;text-transform:uppercase;
+  padding:6px 9px;border-radius:3px}
+.replay button:hover,.replay select:hover{border-color:var(--cyan);color:var(--cyan)}
+.replay-bottom{margin-top:14px}
+.replay input[type=range]{min-width:220px;flex:1;accent-color:var(--cyan)}
+.replay [data-replay-status]{font:12px 'JetBrains Mono',monospace}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 8px var(--green);animation:p 1.6s ease-in-out infinite}
+@keyframes p{50%{opacity:.4;transform:scale(.8)}}
+@media(max-width:800px){.overview-grid{grid-template-columns:1fr}.counts-rail{position:static}.overview-main,.monitor-grid,.storage-grid,.ledger-grid,.paired-grid,.copy-module{grid-template-columns:1fr}.monitor-card.wide,.storage-grid .wide,.ledger-grid .wide,.paired-grid .wide{grid-column:auto}.copy-section{min-height:auto}}
+@media(max-width:600px){main{padding:16px 14px}nav{gap:10px}.replay input[type=range]{min-width:140px}}
+</style><base target="_self"></head><body>
+<header>
+<h1><a href="overview.html">streamlearn</a></h1>
+<nav>
+<a href="overview.html">overview</a>
+<a href="monitor.html">operations</a>
+<a href="ingestion.html">ingestion</a>
+<a href="storage.html">storage</a>
+<a href="ipfs.html">ipfs</a>
+<a href="sources.html">sources</a>
+<a href="topics.html">topics</a>
+<a href="clusters.html">clusters</a>
+<a href="triples.html">triples</a>
+<a href="rules.html">rules</a>
+<a href="graph.html">entity network</a>
+<a href="scatter.html">3d scatter plot</a>
+<a href="heatmap.html">heatmap</a>
+<a href="history.html">history</a>
+<a href="search.html">search</a>
+</nav>
+</header>
+<main><div><h2>topics</h2><div class="viz-meta"><span>0 indexed topic days</span><span>80 central entities</span><span>0 replayable days</span><span>live</span></div><section class="copy-module" aria-label="topics context"><article class="copy-section"><h3>What this shows</h3><p>Central entities, topic drift, and the topic river together, while the overview keeps only the top visible entities.</p></article><article class="copy-section"><h3>Method</h3><p>Topics uses bounded daily topic indexes plus central-entity ranks. The river is a compact daily volume proxy; it is meant to show direction and persistence before a richer historical replay is needed.</p></article><article class="copy-section"><h3>How to read it</h3><p>Use the entity list to identify stable named hubs, then use the river to see whether nearby topic labels are emerging, shrinking, or moving.</p></article><article class="copy-section"><h3>Why this matters</h3><p>Topics are easier to understand when central entities and drift live together instead of forcing comparison across several disconnected pages.</p></article><article class="copy-section"><h3>Long horizon value</h3><p>This becomes the decade-scale atlas: topic bands show emergence and decay, while entities explain what those bands were about.</p></article></section><div id="topics-state"><div class="paired-grid"><div class="primary-panel"><div class="card table-card"><h3>topic river</h3><p class="muted">Daily topic movement remains visible at the top of the page; detailed rows continue below.</p><svg class="mini-chart" viewBox="0 0 320 92" role="img"><polyline points="10.0,82.0" fill="none" stroke="#58e6d9" stroke-width="2" vector-effect="non-scaling-stroke"/><line x1="10" y1="82" x2="310" y2="82" stroke="#3a4554" stroke-width="1"/></svg><p class="muted">no topic-day index rows yet</p></div></div><div class="secondary-panel"><div class="card table-card"><h3>central entities</h3><p class="muted">Top entities stay visible beside the river instead of displacing it.</p><table><tr><th>rank</th><th>entity</th><th>score</th><th>component</th></tr><tr><td>1</td><td>been retracted by</td><td>0.0003</td><td>143</td></tr><tr><td>2</td><td>novel</td><td>0.0003</td><td>772</td></tr><tr><td>3</td><td>safe</td><td>0.0003</td><td>430</td></tr><tr><td>4</td><td>a significant effect on</td><td>0.0003</td><td>586</td></tr><tr><td>5</td><td>first</td><td>0.0002</td><td>1</td></tr><tr><td>6</td><td>complex</td><td>0.0002</td><td>66</td></tr><tr><td>7</td><td>traditional</td><td>0.0002</td><td>4,506</td></tr><tr><td>8</td><td>a positive effect towards the</td><td>0.0002</td><td>453</td></tr><tr><td>9</td><td>a negative and significant impact on</td><td>0.0002</td><td>1,849</td></tr><tr><td>10</td><td>simple</td><td>0.0002</td><td>1</td></tr><tr><td>11</td><td>prospective</td><td>0.0002</td><td>1</td></tr><tr><td>12</td><td>been conducted</td><td>0.0002</td><td>811</td></tr><tr><td>13</td><td>world</td><td>0.0002</td><td>28</td></tr><tr><td>14</td><td>multicentre</td><td>0.0002</td><td>1</td></tr><tr><td>15</td><td>feasible</td><td>0.0002</td><td>2,741</td></tr><tr><td>16</td><td>argued</td><td>0.0002</td><td>2,935</td></tr></table></div></div><div class="wide card table-card"><h3>recent topic flow</h3><p class="muted">no topic-day index rows yet</p></div><div class="wide card table-card"><h3>central entity register</h3><table><tr><th>rank</th><th>entity</th><th>score</th><th>component</th></tr><tr><td>1</td><td>been retracted by</td><td>0.0003</td><td>143</td></tr><tr><td>2</td><td>novel</td><td>0.0003</td><td>772</td></tr><tr><td>3</td><td>safe</td><td>0.0003</td><td>430</td></tr><tr><td>4</td><td>a significant effect on</td><td>0.0003</td><td>586</td></tr><tr><td>5</td><td>first</td><td>0.0002</td><td>1</td></tr><tr><td>6</td><td>complex</td><td>0.0002</td><td>66</td></tr><tr><td>7</td><td>traditional</td><td>0.0002</td><td>4,506</td></tr><tr><td>8</td><td>a positive effect towards the</td><td>0.0002</td><td>453</td></tr><tr><td>9</td><td>a negative and significant impact on</td><td>0.0002</td><td>1,849</td></tr><tr><td>10</td><td>simple</td><td>0.0002</td><td>1</td></tr><tr><td>11</td><td>prospective</td><td>0.0002</td><td>1</td></tr><tr><td>12</td><td>been conducted</td><td>0.0002</td><td>811</td></tr><tr><td>13</td><td>world</td><td>0.0002</td><td>28</td></tr><tr><td>14</td><td>multicentre</td><td>0.0002</td><td>1</td></tr><tr><td>15</td><td>feasible</td><td>0.0002</td><td>2,741</td></tr><tr><td>16</td><td>argued</td><td>0.0002</td><td>2,935</td></tr><tr><td>17</td><td>a positive and significant effect on</td><td>0.0002</td><td>24</td></tr><tr><td>18</td><td>chronic</td><td>0.0002</td><td>7</td></tr><tr><td>19</td><td>been performed</td><td>0.0002</td><td>246</td></tr><tr><td>20</td><td>grown</td><td>0.0001</td><td>317</td></tr><tr><td>21</td><td>an effect on</td><td>0.0001</td><td>1,105</td></tr><tr><td>22</td><td>promising</td><td>0.0001</td><td>1,306</td></tr><tr><td>23</td><td>not yet been established</td><td>0.0001</td><td>1,236</td></tr><tr><td>24</td><td>effective</td><td>0.0001</td><td>812</td></tr><tr><td>25</td><td>argued that</td><td>0.0001</td><td>473</td></tr><tr><td>26</td><td>not been reported</td><td>0.0001</td><td>1,565</td></tr><tr><td>27</td><td>anti</td><td>0.0001</td><td>4,508</td></tr><tr><td>28</td><td>member of the</td><td>0.0001</td><td>842</td></tr><tr><td>29</td><td>stable</td><td>0.0001</td><td>161</td></tr><tr><td>30</td><td>common</td><td>0.0001</td><td>420</td></tr><tr><td>31</td><td>of</td><td>0.0001</td><td>280</td></tr><tr><td>32</td><td>been carried out</td><td>0.0001</td><td>146</td></tr><tr><td>33</td><td>a significant negative effect on</td><td>0.0001</td><td>2,343</td></tr><tr><td>34</td><td>part of</td><td>0.0001</td><td>1</td></tr><tr><td>35</td><td>open-source</td><td>0.0001</td><td>403</td></tr><tr><td>36</td><td>multi</td><td>0.0001</td><td>4,766</td></tr><tr><td>37</td><td>a</td><td>0.0001</td><td>1</td></tr><tr><td>38</td><td>new</td><td>0.0001</td><td>391</td></tr><tr><td>39</td><td>been limited</td><td>0.0001</td><td>698</td></tr><tr><td>40</td><td>been proposed</td><td>0.0001</td><td>1,566</td></tr><tr><td>41</td><td>significant</td><td>0.0001</td><td>22</td></tr><tr><td>42</td><td>powerful</td><td>0.0001</td><td>1</td></tr><tr><td>43</td><td>been proven</td><td>0.0001</td><td>1</td></tr><tr><td>44</td><td>reliable</td><td>0.0001</td><td>100</td></tr><tr><td>45</td><td>essential</td><td>0.0001</td><td>972</td></tr><tr><td>46</td><td>done</td><td>0.0001</td><td>1,007</td></tr><tr><td>47</td><td>sensitive</td><td>0.0001</td><td>1,144</td></tr><tr><td>48</td><td>intensified</td><td>0.0001</td><td>1,341</td></tr><tr><td>49</td><td>often</td><td>0.0001</td><td>1,320</td></tr><tr><td>50</td><td>emerging</td><td>0.0001</td><td>970</td></tr><tr><td>51</td><td>embedded</td><td>0.0001</td><td>866</td></tr><tr><td>52</td><td>been ongoing for decades</td><td>0.0001</td><td>2,377</td></tr><tr><td>53</td><td>an effect</td><td>0.0001</td><td>568</td></tr><tr><td>54</td><td>the strongest positive impact on</td><td>0.0001</td><td>2,901</td></tr><tr><td>55</td><td>capital of</td><td>0.0001</td><td>2,985</td></tr><tr><td>56</td><td>historical</td><td>0.0001</td><td>989</td></tr><tr><td>57</td><td>implemented</td><td>0.0001</td><td>3,326</td></tr><tr><td>58</td><td>leading cause of irreversible blindness worldwide</td><td>0.0001</td><td>1,452</td></tr><tr><td>59</td><td>modified</td><td>0.0001</td><td>3,598</td></tr><tr><td>60</td><td>safe alternative to</td><td>0.0001</td><td>1,813</td></tr><tr><td>61</td><td>not been explored</td><td>0.0001</td><td>3,978</td></tr><tr><td>62</td><td>variant of</td><td>0.0001</td><td>2,967</td></tr><tr><td>63</td><td>hybrid</td><td>0.0001</td><td>2,310</td></tr><tr><td>64</td><td>efficient</td><td>0.0001</td><td>4,737</td></tr><tr><td>65</td><td>comprehensive</td><td>0.0001</td><td>4,249</td></tr><tr><td>66</td><td>important</td><td>0.0001</td><td>117</td></tr><tr><td>67</td><td>manualised program</td><td>0.0001</td><td>2,281</td></tr><tr><td>68</td><td>oxidative stress</td><td>0.0001</td><td>647</td></tr><tr><td>69</td><td>valid and reliable instrument for assessing</td><td>0.0001</td><td>1,358</td></tr><tr><td>70</td><td>been extensively studied</td><td>0.0001</td><td>5,454</td></tr><tr><td>71</td><td>critical regulator of</td><td>0.0001</td><td>1,898</td></tr><tr><td>72</td><td>well</td><td>0.0001</td><td>1,887</td></tr><tr><td>73</td><td>developed a</td><td>0.0001</td><td>4,213</td></tr><tr><td>74</td><td>practical</td><td>0.0001</td><td>5,380</td></tr><tr><td>75</td><td>been running quite well</td><td>0.0001</td><td>478</td></tr><tr><td>76</td><td>nationwide</td><td>0.0001</td><td>5,472</td></tr><tr><td>77</td><td>author on</td><td>0.0001</td><td>6,125</td></tr><tr><td>78</td><td>been classified as a group</td><td>0.0001</td><td>5,686</td></tr><tr><td>79</td><td>been demonstrated</td><td>0.0001</td><td>1,342</td></tr><tr><td>80</td><td>been simulated using</td><td>0.0001</td><td>741</td></tr></table></div></div></div><script>window.__TOPICS__={"topic_days": 0, "window_days": 365, "entity_run": 2621, "entities": [{"entity": "been retracted by", "score": 0.0003142370895977799, "rank": 1, "component": 143}, {"entity": "novel", "score": 0.0002971174948047951, "rank": 2, "component": 772}, {"entity": "safe", "score": 0.0002671582039170717, "rank": 3, "component": 430}, {"entity": "a significant effect on", "score": 0.000252928455253672, "rank": 4, "component": 586}, {"entity": "first", "score": 0.00023280309753326024, "rank": 5, "component": 1}, {"entity": "complex", "score": 0.0002189358585086811, "rank": 6, "component": 66}, {"entity": "traditional", "score": 0.00021151952083987103, "rank": 7, "component": 4506}, {"entity": "a positive effect towards the", "score": 0.00021151952083987103, "rank": 8, "component": 453}, {"entity": "a negative and significant impact on", "score": 0.0001909760070882893, "rank": 9, "component": 1849}, {"entity": "simple", "score": 0.00018871256532805214, "rank": 10, "component": 1}, {"entity": "prospective", "score": 0.00018867706199675115, "rank": 11, "component": 1}, {"entity": "been conducted", "score": 0.00018350563845135048, "rank": 12, "component": 811}, {"entity": "world", "score": 0.00017970746284379466, "rank": 13, "component": 28}, {"entity": "multicentre", "score": 0.00017733401452387, "rank": 14, "component": 1}, {"entity": "feasible", "score": 0.0001772803312539014, "rank": 15, "component": 2741}, {"entity": "argued", "score": 0.0001772803312539014, "rank": 16, "component": 2935}, {"entity": "a positive and significant effect on", "score": 0.0001724038406158997, "rank": 17, "component": 24}, {"entity": "chronic", "score": 0.00016670113565431496, "rank": 18, "component": 7}, {"entity": "been performed", "score": 0.00016016073646091662, "rank": 19, "component": 246}, {"entity": "grown", "score": 0.00014926644886538082, "rank": 20, "component": 317}, {"entity": "an effect on", "score": 0.0001487476732655934, "rank": 21, "component": 1105}, {"entity": "promising", "score": 0.00014525012164122013, "rank": 22, "component": 1306}, {"entity": "not yet been established", "score": 0.00014304114166793178, "rank": 23, "component": 1236}, {"entity": "effective", "score": 0.00014304114166793178, "rank": 24, "component": 812}, {"entity": "argued that", "score": 0.00014304114166793178, "rank": 25, "component": 473}, {"entity": "not been reported", "score": 0.00014304114166793178, "rank": 26, "component": 1565}, {"entity": "anti", "score": 0.00014304114166793178, "rank": 27, "component": 4508}, {"entity": "member of the", "score": 0.00014304114166793178, "rank": 28, "component": 842}, {"entity": "stable", "score": 0.00014304114166793178, "rank": 29, "component": 161}, {"entity": "common", "score": 0.00013900580860958537, "rank": 30, "component": 420}, {"entity": "of", "score": 0.00013418469830603428, "rank": 31, "component": 280}, {"entity": "been carried out", "score": 0.00012994512196983667, "rank": 32, "component": 146}, {"entity": "a significant negative effect on", "score": 0.00012934546583354394, "rank": 33, "component": 2343}, {"entity": "part of", "score": 0.0001259407177537745, "rank": 34, "component": 1}, {"entity": "open-source", "score": 0.000125921546874947, "rank": 35, "component": 403}, {"entity": "multi", "score": 0.000125921546874947, "rank": 36, "component": 4766}, {"entity": "a", "score": 0.00012331404700913475, "rank": 37, "component": 1}, {"entity": "new", "score": 0.00011477390375393361, "rank": 38, "component": 391}, {"entity": "been limited", "score": 0.00011308185078020835, "rank": 39, "component": 698}, {"entity": "been proposed", "score": 0.00011154108724883973, "rank": 40, "component": 1566}, {"entity": "significant", "score": 0.00010888755005592708, "rank": 41, "component": 22}, {"entity": "powerful", "score": 0.00010886637200592448, "rank": 42, "component": 1}, {"entity": "been proven", "score": 0.00010882112296078968, "rank": 43, "component": 1}, {"entity": "reliable", "score": 0.00010880195208196216, "rank": 44, "component": 100}, {"entity": "essential", "score": 0.00010880195208196216, "rank": 45, "component": 972}, {"entity": "done", "score": 0.00010880195208196216, "rank": 46, "component": 1007}, {"entity": "sensitive", "score": 0.00010880195208196216, "rank": 47, "component": 1144}, {"entity": "intensified", "score": 0.00010880195208196216, "rank": 48, "component": 1341}, {"entity": "often", "score": 0.00010880195208196216, "rank": 49, "component": 1320}, {"entity": "emerging", "score": 0.00010880195208196216, "rank": 50, "component": 970}, {"entity": "embedded", "score": 0.00010880195208196216, "rank": 51, "component": 866}, {"entity": "been ongoing for decades", "score": 0.00010880195208196216, "rank": 52, "component": 2377}, {"entity": "an effect", "score": 0.00010880195208196216, "rank": 53, "component": 568}, {"entity": "the strongest positive impact on", "score": 0.00010880195208196216, "rank": 54, "component": 2901}, {"entity": "capital of", "score": 0.00010880195208196216, "rank": 55, "component": 2985}, {"entity": "historical", "score": 0.00010880195208196216, "rank": 56, "component": 989}, {"entity": "implemented", "score": 0.00010880195208196216, "rank": 57, "component": 3326}, {"entity": "leading cause of irreversible blindness worldwide", "score": 0.00010880195208196216, "rank": 58, "component": 1452}, {"entity": "modified", "score": 0.00010880195208196216, "rank": 59, "component": 3598}, {"entity": "safe alternative to", "score": 0.00010880195208196216, "rank": 60, "component": 1813}, {"entity": "not been explored", "score": 0.00010880195208196216, "rank": 61, "component": 3978}, {"entity": "variant of", "score": 0.00010880195208196216, "rank": 62, "component": 2967}, {"entity": "hybrid", "score": 0.00010880195208196216, "rank": 63, "component": 2310}, {"entity": "efficient", "score": 0.00010880195208196216, "rank": 64, "component": 4737}, {"entity": "comprehensive", "score": 0.00010880195208196216, "rank": 65, "component": 4249}, {"entity": "important", "score": 0.00010880195208196216, "rank": 66, "component": 117}, {"entity": "manualised program", "score": 0.00010880195208196216, "rank": 67, "component": 2281}, {"entity": "oxidative stress", "score": 0.00010880195208196216, "rank": 68, "component": 647}, {"entity": "valid and reliable instrument for assessing", "score": 0.00010880195208196216, "rank": 69, "component": 1358}, {"entity": "been extensively studied", "score": 0.00010880195208196216, "rank": 70, "component": 5454}, {"entity": "critical regulator of", "score": 0.00010880195208196216, "rank": 71, "component": 1898}, {"entity": "well", "score": 0.00010880195208196216, "rank": 72, "component": 1887}, {"entity": "developed a", "score": 0.00010880195208196216, "rank": 73, "component": 4213}, {"entity": "practical", "score": 0.00010880195208196216, "rank": 74, "component": 5380}, {"entity": "been running quite well", "score": 0.00010880195208196216, "rank": 75, "component": 478}, {"entity": "nationwide", "score": 0.00010880195208196216, "rank": 76, "component": 5472}, {"entity": "author on", "score": 0.00010880195208196216, "rank": 77, "component": 6125}, {"entity": "been classified as a group", "score": 0.00010880195208196216, "rank": 78, "component": 5686}, {"entity": "been demonstrated", "score": 0.00010880195208196216, "rank": 79, "component": 1342}, {"entity": "been simulated using", "score": 0.00010880195208196216, "rank": 80, "component": 741}], "topic_rows": [], "series": []}</script></div></main><script src="../static/sl.js" defer></script></body></html>
