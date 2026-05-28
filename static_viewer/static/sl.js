@@ -6,6 +6,7 @@
   // The overview page has a <dl id="counts"> with <dt>k</dt><dd>n</dd> pairs.
   // /events emits an `event: counts` frame whenever data_version changes.
   function startSse() {
+    if (window.location.pathname.indexOf('/pages/') !== -1) return;
     if (!document.getElementById('counts') || typeof EventSource === 'undefined') return;
     var es = new EventSource('/events');
     es.addEventListener('counts', function (ev) {
@@ -31,6 +32,63 @@
     es.onerror = function () {
       // EventSource auto-reconnects; nothing to do.
     };
+  }
+
+  // ── GitHub Pages auto-refresh ───────────────────────────────────────────
+  function startAutoRefresh() {
+    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return;
+    if (window.location.pathname.indexOf('/pages/') === -1) return;
+    if (new URLSearchParams(window.location.search || '').get('replay') === '1') return;
+    var manifestUrl = new URL('manifest.json', window.location.href);
+    var known = '';
+    var timer = null;
+    var pendingReload = false;
+
+    function manifestId(manifest) {
+      if (!manifest || typeof manifest !== 'object') return '';
+      return String(manifest.build_id || manifest.batchId || manifest.generatedAt || '');
+    }
+
+    function intervalMs() {
+      return document.hidden ? 300000 : 60000;
+    }
+
+    function schedule(delay) {
+      clearTimeout(timer);
+      timer = setTimeout(check, delay == null ? intervalMs() : delay);
+    }
+
+    function reloadSoon() {
+      if (pendingReload) return;
+      pendingReload = true;
+      setTimeout(function () {
+        window.location.reload();
+      }, 15000);
+    }
+
+    function check() {
+      var url = manifestUrl.href + (manifestUrl.search ? '&' : '?') + '_ts=' + Date.now();
+      fetch(url, { cache: 'no-store' })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (manifest) {
+          var next = manifestId(manifest);
+          if (!next) return;
+          if (!known) {
+            known = next;
+            return;
+          }
+          if (next !== known) reloadSoon();
+        })
+        .catch(function () {})
+        .then(function () {
+          if (!pendingReload) schedule();
+        });
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (!pendingReload) schedule();
+    });
+    schedule(5000);
   }
 
   // ── /search live filter ─────────────────────────────────────────────────
@@ -89,7 +147,7 @@
     var runs = (data.runs || []).map(function (r) {
       var ok = r.last_exit === 0, bad = r.last_exit && r.last_exit !== 0;
       return '<tr><td>' + esc(r.stage) + '</td><td>' + esc(r.last_started || '-') +
-             '</td><td><span class="tag ' + (ok ? 'ok' : bad ? 'bad' : 'warn') + '">' +
+             '</td><td class="exit-cell"><span class="tag ' + (ok ? 'ok' : bad ? 'bad' : 'warn') + '">' +
              (ok ? 'ok' : bad ? 'fail' : '-') + '</span></td></tr>';
     }).join('');
     root.innerHTML =
@@ -869,7 +927,7 @@
     var runs = (data.recent_runs || []).map(function (r) {
       var ok = Number(r.exit_code) === 0;
       return '<tr><td>' + esc(r.id) + '</td><td>' + esc(r.stage) + '</td><td>' +
-        esc(r.started_at || '') + '</td><td><span class="tag ' + (ok ? 'ok' : 'bad') + '">' +
+        esc(r.started_at || '') + '</td><td class="exit-cell"><span class="tag ' + (ok ? 'ok' : 'bad') + '">' +
         (ok ? 'ok' : 'fail') + '</span></td></tr>';
     }).join('');
     var topRules = ((data.rules && data.rules.top) || []).map(function (r) {
@@ -925,6 +983,7 @@
   } else { boot(); }
 
   function boot() {
+    startAutoRefresh();
     startSse();
     startSearch();
     startOverview();
