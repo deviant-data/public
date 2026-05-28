@@ -3,6 +3,8 @@
 
   const root = mustElement("renderRoot");
   let activeState = null;
+  let refreshTimer = 0;
+  let refreshKnownId = "";
 
   loadGeneratedPages()
     .then((handled) => handled || loadState())
@@ -10,7 +12,9 @@
       if (!state) return;
       registerCache();
       activeState = normalizeState(state);
+      refreshKnownId = stateId(activeState);
       render(activeState);
+      startAutoRefresh();
     })
     .catch((error) => {
       root.replaceChildren(emptyShell(error.message));
@@ -44,12 +48,49 @@
 
   async function fetchJson(path) {
     try {
-      const response = await fetch(path, { cache: "no-store" });
+      const response = await fetch(cacheBusted(path), { cache: "no-store" });
       if (!response.ok) return null;
       return response.json();
     } catch {
       return null;
     }
+  }
+
+  function cacheBusted(path) {
+    const url = new URL(path, location.href);
+    url.searchParams.set("_ts", String(Date.now()));
+    return url.href;
+  }
+
+  function stateId(state) {
+    return String((state && (state.batchId || state.sha256 || state.generatedAt)) || "");
+  }
+
+  function startAutoRefresh() {
+    if (location.protocol !== "http:" && location.protocol !== "https:") return;
+    if (new URLSearchParams(location.search).get("replay") === "1") return;
+    const schedule = (delay) => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(checkForFreshState, delay ?? (document.hidden ? 300000 : 60000));
+    };
+    document.addEventListener("visibilitychange", () => schedule());
+    schedule(5000);
+  }
+
+  async function checkForFreshState() {
+    const next = await loadState().catch(() => null);
+    if (next) {
+      const normalized = normalizeState(next);
+      const nextId = stateId(normalized);
+      if (nextId && refreshKnownId && nextId !== refreshKnownId) {
+        activeState = normalized;
+        refreshKnownId = nextId;
+        render(activeState);
+      } else if (!refreshKnownId) {
+        refreshKnownId = nextId;
+      }
+    }
+    refreshTimer = setTimeout(checkForFreshState, document.hidden ? 300000 : 60000);
   }
 
   function normalizeState(state) {
