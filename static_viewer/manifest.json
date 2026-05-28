@@ -1,0 +1,8 @@
+{
+  "name": "Streamlearn Static Viewer",
+  "short_name": "Streamlearn",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#080d12",
+  "theme_color": "#080d12"
+}

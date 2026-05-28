@@ -1,0 +1,18 @@
+Static Viewer v4 progress
+Date: 2026-05-27
+
+Started from a copied prior Static Viewer tree.
+
+Completed:
+- Replaced copied render logic with state-only render logic.
+- Added streamlearn-viewer-state rendering from state/latest.json.
+- Updated schema validation to accept only streamlearn-viewer-state.
+- Updated cache prefix to static-viewer-v4.
+- Updated README and NOTES for the state-only architecture.
+- Removed old handoff handling and renamed per-view input to data.
+- Removed local machine paths and stale copied folders from the public source.
+- Switched direction to generated static pages first, with state rendering as fallback.
+
+Current state contract:
+- state/latest.json is produced by streamlearn_viewer.
+- Static Viewer v4 renders the views array directly.
