@@ -1,6 +1,6 @@
-# Static Viewer v4
+# Static Viewer v5
 
-Static Viewer v4 is a static public surface for Streamlearn state.
+Static Viewer v5 is a static public surface for Streamlearn state.
 
 It can serve either:
 
@@ -11,7 +11,13 @@ It can serve either:
 state/latest.json
 ```
 
-Static Viewer v4 does not select endpoints and does not expose the private Streamlearn service.
+Static Viewer v5 does not select endpoints and does not expose the private Streamlearn service.
+
+V5 adds manifest-controlled state mode. If `pages/manifest.json` contains
+`"stateOnly": true`, `"preferState": true`, or `"viewerMode": "state"`, the
+root shell renders `state/latest.json` instead of redirecting to generated
+pages. Generated pages also hand off to the root state renderer when the
+manifest requests state mode.
 
 ## Files
 

@@ -3,16 +3,15 @@
 
   const root = mustElement("renderRoot");
   let activeState = null;
-  let refreshTimer = 0;
-  let refreshKnownId = "";
+  let activeSignal = "";
+  let refreshTimer = null;
 
-  loadGeneratedPages()
-    .then((handled) => handled || loadState())
-    .then((state) => {
-      if (!state) return;
+  loadSurface()
+    .then((surface) => {
+      if (!surface) return;
       registerCache();
-      activeState = normalizeState(state);
-      refreshKnownId = stateId(activeState);
+      activeSignal = surface.signal;
+      activeState = normalizeState(surface.state);
       render(activeState);
       startAutoRefresh();
     })
@@ -30,20 +29,59 @@
     return found;
   }
 
-  async function loadState() {
-    const state = await fetchJson("state/latest.json") || await fetchJson("latest.json");
+  async function loadSurface() {
+    const query = new URLSearchParams(location.search);
+    const stateRequested = query.get("fallback") === "1" || query.get("state") === "1";
+    const [manifest, state] = await Promise.all([fetchJson("pages/manifest.json"), loadState()]);
+    if (!stateRequested && shouldUseGeneratedPages(manifest)) {
+      location.replace(`pages/${firstPage(manifest)}`);
+      return null;
+    }
     if (!state) throw new Error("Waiting for state/latest.json");
-    return state;
+    return { state, signal: surfaceSignal(manifest, state) };
   }
 
-  async function loadGeneratedPages() {
-    if (new URLSearchParams(location.search).get("fallback") === "1") return false;
-    const manifest = await fetchJson("pages/manifest.json");
-    if (!manifest || !Array.isArray(manifest.pages) || !manifest.pages.length) return false;
-    const first = manifest.defaultPage || manifest.pages[0].file || "";
-    if (!first) return false;
-    location.replace(`pages/${first}`);
-    return true;
+  async function loadState() {
+    return await fetchJson("state/latest.json") || await fetchJson("latest.json");
+  }
+
+  function shouldUseGeneratedPages(manifest) {
+    return hasGeneratedPages(manifest) && !manifestWantsState(manifest);
+  }
+
+  function hasGeneratedPages(manifest) {
+    return !!(manifest && Array.isArray(manifest.pages) && manifest.pages.length && firstPage(manifest));
+  }
+
+  function firstPage(manifest) {
+    const first = manifest && (manifest.defaultPage || (manifest.pages[0] && manifest.pages[0].file));
+    return String(first || "");
+  }
+
+  function manifestWantsState(manifest) {
+    if (!manifest || typeof manifest !== "object") return false;
+    const mode = String(manifest.viewerMode || manifest.mode || manifest.renderMode || "").toLowerCase();
+    return manifest.stateOnly === true
+      || manifest.preferState === true
+      || manifest.latestJsonOnly === true
+      || mode === "state"
+      || mode === "latest"
+      || mode === "json";
+  }
+
+  function surfaceSignal(manifest, state) {
+    return [manifestSignal(manifest), stateSignal(state)].filter(Boolean).join("|");
+  }
+
+  function manifestSignal(manifest) {
+    if (!manifest || typeof manifest !== "object") return "";
+    return String(manifest.build_id || manifest.buildId || manifest.batchId
+      || manifest.stateId || manifest.latestId || manifest.generatedAt || manifest.sha256 || "");
+  }
+
+  function stateSignal(state) {
+    if (!state || typeof state !== "object") return "";
+    return String(state.batchId || state.sha256 || state.generatedAt || "");
   }
 
   async function fetchJson(path) {
@@ -62,35 +100,38 @@
     return url.href;
   }
 
-  function stateId(state) {
-    return String((state && (state.batchId || state.sha256 || state.generatedAt)) || "");
-  }
-
   function startAutoRefresh() {
     if (location.protocol !== "http:" && location.protocol !== "https:") return;
     if (new URLSearchParams(location.search).get("replay") === "1") return;
-    const schedule = (delay) => {
-      clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(checkForFreshState, delay ?? (document.hidden ? 300000 : 60000));
-    };
-    document.addEventListener("visibilitychange", () => schedule());
-    schedule(5000);
+    scheduleRefresh(5000);
+    document.addEventListener("visibilitychange", scheduleRefresh);
   }
 
-  async function checkForFreshState() {
-    const next = await loadState().catch(() => null);
-    if (next) {
-      const normalized = normalizeState(next);
-      const nextId = stateId(normalized);
-      if (nextId && refreshKnownId && nextId !== refreshKnownId) {
-        activeState = normalized;
-        refreshKnownId = nextId;
-        render(activeState);
-      } else if (!refreshKnownId) {
-        refreshKnownId = nextId;
+  function scheduleRefresh(delay) {
+    clearTimeout(refreshTimer);
+    const ms = typeof delay === "number" ? delay : (document.hidden ? 300000 : 60000);
+    refreshTimer = setTimeout(checkForUpdate, ms);
+  }
+
+  async function checkForUpdate() {
+    try {
+      const [manifest, state] = await Promise.all([fetchJson("pages/manifest.json"), loadState()]);
+      const nextSignal = surfaceSignal(manifest, state);
+      if (nextSignal && nextSignal !== activeSignal) {
+        if (shouldUseGeneratedPages(manifest)) {
+          location.reload();
+          return;
+        }
+        if (state) {
+          activeSignal = nextSignal;
+          activeState = normalizeState(state);
+          render(activeState);
+        }
       }
+    } catch {
+      // Keep the current static view if the network is temporarily unavailable.
     }
-    refreshTimer = setTimeout(checkForFreshState, document.hidden ? 300000 : 60000);
+    scheduleRefresh();
   }
 
   function normalizeState(state) {

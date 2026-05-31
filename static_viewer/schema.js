@@ -4,7 +4,7 @@
   function assertState(state) {
     const source = objectValue(state);
     if (source.kind !== "streamlearn-viewer-state") {
-      throw new Error("Static Viewer v4 expects streamlearn-viewer-state.");
+      throw new Error("Static Viewer v5 expects streamlearn-viewer-state.");
     }
     if (!Array.isArray(source.views)) throw new Error("State views are required.");
     source.views.forEach((view, index) => assertView(view, index));
