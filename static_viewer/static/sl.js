@@ -46,19 +46,7 @@
 
     function manifestId(manifest) {
       if (!manifest || typeof manifest !== 'object') return '';
-      return String(manifest.build_id || manifest.buildId || manifest.batchId ||
-        manifest.stateId || manifest.latestId || manifest.generatedAt || manifest.sha256 || '');
-    }
-
-    function manifestWantsState(manifest) {
-      if (!manifest || typeof manifest !== 'object') return false;
-      var mode = String(manifest.viewerMode || manifest.mode || manifest.renderMode || '').toLowerCase();
-      return manifest.stateOnly === true ||
-        manifest.preferState === true ||
-        manifest.latestJsonOnly === true ||
-        mode === 'state' ||
-        mode === 'latest' ||
-        mode === 'json';
+      return String(manifest.build_id || manifest.batchId || manifest.generatedAt || '');
     }
 
     function intervalMs() {
@@ -78,14 +66,6 @@
       }, 15000);
     }
 
-    function stateSoon() {
-      if (pendingReload) return;
-      pendingReload = true;
-      setTimeout(function () {
-        window.location.replace(new URL('../?state=1', window.location.href).href);
-      }, 1500);
-    }
-
     function check() {
       var url = manifestUrl.href + (manifestUrl.search ? '&' : '?') + '_ts=' + Date.now();
       fetch(url, { cache: 'no-store' })
@@ -93,10 +73,6 @@
         .then(function (manifest) {
           var next = manifestId(manifest);
           if (!next) return;
-          if (manifestWantsState(manifest)) {
-            stateSoon();
-            return;
-          }
           if (!known) {
             known = next;
             return;

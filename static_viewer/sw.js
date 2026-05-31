@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_PREFIX = "static-viewer-v5-";
+const CACHE_PREFIX = "static-viewer-v4-";
 const CORE_CACHE = `${CACHE_PREFIX}core`;
 const CORE_FILES = ["./", "index.html", "render.html", "render.css", "render.js", "schema.js"];
 
@@ -24,11 +24,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.endsWith("/pages/manifest.json")) {
-    event.respondWith(refreshJson(request));
-    return;
-  }
-
   if (url.pathname.includes("/state/")) {
     event.respondWith(cacheStateAsset(request));
     return;
@@ -36,10 +31,6 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(fetch(request).catch(() => caches.match(request)));
 });
-
-async function refreshJson(request) {
-  return fetch(request, { cache: "no-store" });
-}
 
 async function refreshLatest(request) {
   const response = await fetch(request, { cache: "no-store" });
