@@ -72,6 +72,10 @@ h3{font-size:16px;font-weight:600;margin:0 0 8px;color:var(--ink)}
 .slider-line output{font:12px 'JetBrains Mono',monospace;color:var(--cyan)}
 .viz-card{position:relative;overflow:hidden;padding:0}
 .viz-card canvas,.viz-card svg{width:100%;display:block;background:#050810}
+.heatmap-card{padding:12px}
+.heatmap-controls{margin:0 0 10px}
+.heatmap-viewport{max-height:72vh;overflow:auto;background:#050810;border:1px solid var(--ink-low)}
+.heatmap-viewport svg{display:block;background:#050810;max-width:none}
 .viz-tip{position:absolute;left:0;top:0;z-index:4;pointer-events:none;max-width:300px;
   background:rgba(10,14,20,.94);border:1px solid var(--ink-low);border-radius:4px;
   color:var(--ink);font:12px 'JetBrains Mono',monospace;padding:7px 9px;
@@ -93,7 +97,9 @@ code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--bg-3
   padding:1px 5px;border:1px solid var(--ink-low);border-radius:2px;color:var(--cyan)}
 .muted{color:var(--ink-mute)}
 .empty{padding:32px;text-align:center;color:var(--ink-mute)}
-.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:10px;
+.exit-cell{width:1%;min-width:42px;white-space:nowrap}
+.tag{display:inline-block;min-width:2.4em;text-align:center;white-space:nowrap;
+  font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.25;
   letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--ink-low);
   padding:1px 6px;border-radius:2px;color:var(--ink-soft);margin-right:4px}
 .tag.ok{color:var(--green);border-color:rgba(91,224,132,.3)}
