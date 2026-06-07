@@ -701,16 +701,30 @@
   }
 
   // ── /heatmap ────────────────────────────────────────────────────────────
+  var heatMode = 'matrix';
+  var heatData = null;
+
   function startHeat() {
     var data = window.__HEAT__;
     var svg = document.getElementById('heat');
     if (!data || !svg) return;
+    heatData = data;
     drawHeat(data);
     startReplay('heatmap', data, drawHeat);
     var zoom = document.getElementById('heat-zoom');
     var output = document.getElementById('heat-zoom-output');
     if (zoom) zoom.addEventListener('input', function () {
       applyHeatZoom(Number(zoom.value || 100), output);
+    });
+    document.querySelectorAll('[data-heat-mode]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        heatMode = button.getAttribute('data-heat-mode') || 'matrix';
+        document.querySelectorAll('[data-heat-mode]').forEach(function (candidate) {
+          candidate.setAttribute('aria-pressed',
+            candidate.getAttribute('data-heat-mode') === heatMode ? 'true' : 'false');
+        });
+        drawHeat(heatData);
+      });
     });
   }
 
@@ -741,6 +755,11 @@
         svg.innerHTML = '<text x="16" y="44" font-family="JetBrains Mono" font-size="12" fill="#aab3bf">heatmap data unavailable</text>';
         return;
       }
+    }
+    heatData = data;
+    if (heatMode === 'maze') {
+      drawHeatMaze(labels, M);
+      return;
     }
     var cell = n > 180 ? 8 : (n > 120 ? 10 : (n > 60 ? 14 : (n > 36 ? 20 : 36)));
     var pad = n > 120 ? 48 : (n > 60 ? 56 : 64);
@@ -778,6 +797,79 @@
                    '" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#050810">' + v + '</text>');
       }
     }
+    svg.innerHTML = parts.join('');
+  }
+
+  function drawHeatMaze(labels, M) {
+    var svg = document.getElementById('heat');
+    var n = labels.length;
+    var cols = Math.ceil(Math.sqrt(n));
+    var rows = Math.ceil(n / cols);
+    var cell = n > 180 ? 30 : (n > 100 ? 36 : 48);
+    var pad = 36;
+    var width = pad * 2 + cols * cell;
+    var height = pad * 2 + rows * cell;
+    var visited = new Array(n).fill(false);
+    var best = new Array(n).fill(-1);
+    var parent = new Array(n).fill(-1);
+    best[0] = 0;
+    for (var step = 0; step < n; step++) {
+      var node = -1;
+      for (var pick = 0; pick < n; pick++) {
+        if (!visited[pick] && (node < 0 || best[pick] > best[node])) node = pick;
+      }
+      if (node < 0) break;
+      visited[node] = true;
+      for (var next = 0; next < n; next++) {
+        var weight = Number(M[node][next] || 0);
+        if (!visited[next] && weight > best[next]) {
+          best[next] = weight;
+          parent[next] = node;
+        }
+      }
+    }
+    function point(index) {
+      var row = Math.floor(index / cols);
+      var logical = index % cols;
+      var col = row % 2 ? cols - logical - 1 : logical;
+      return { x: pad + col * cell + cell / 2, y: pad + row * cell + cell / 2 };
+    }
+    var max = Math.max.apply(null, best.concat([1]));
+    var parts = [];
+    for (var edge = 1; edge < n; edge++) {
+      var from = point(parent[edge] < 0 ? edge - 1 : parent[edge]);
+      var to = point(edge);
+      var middle = (from.x + to.x) / 2;
+      var strength = Math.max(0, Number(best[edge] || 0)) / max;
+      parts.push('<path d="M' + from.x + ' ' + from.y + 'H' + middle +
+                 'V' + to.y + 'H' + to.x + '" fill="none" stroke="' +
+                 (strength > 0.5 ? '#58e6d9' : '#536070') +
+                 '" stroke-width="' + (1.5 + strength * 4).toFixed(1) +
+                 '" stroke-linecap="round"><title>L' +
+                 esc(labels[parent[edge] < 0 ? edge - 1 : parent[edge]]) +
+                 ' ↔ L' + esc(labels[edge]) + ' · ' +
+                 Math.max(0, Number(best[edge] || 0)) + '</title></path>');
+    }
+    var stride = n > 160 ? 8 : (n > 80 ? 4 : (n > 40 ? 2 : 1));
+    for (var i = 0; i < n; i++) {
+      var p = point(i);
+      parts.push('<rect x="' + (p.x - cell * 0.28).toFixed(1) +
+                 '" y="' + (p.y - cell * 0.28).toFixed(1) +
+                 '" width="' + (cell * 0.56).toFixed(1) +
+                 '" height="' + (cell * 0.56).toFixed(1) +
+                 '" rx="2" fill="#111923" stroke="' +
+                 (i === 0 ? '#5be084' : (i === n - 1 ? '#f0a050' : '#58e6d9')) +
+                 '"><title>L' + esc(labels[i]) + '</title></rect>');
+      if (i % stride === 0) {
+        parts.push('<text x="' + p.x + '" y="' + (p.y + 3) +
+                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#e8ecf1">L' +
+                   esc(labels[i]) + '</text>');
+      }
+    }
+    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    svg.setAttribute('data-natural-width', String(width));
+    applyHeatZoom(Number(document.getElementById('heat-zoom').value || 100),
+                  document.getElementById('heat-zoom-output'));
     svg.innerHTML = parts.join('');
   }
 
