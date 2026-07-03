@@ -72,6 +72,15 @@ h3{font-size:16px;font-weight:600;margin:0 0 8px;color:var(--ink)}
 .slider-line output{font:12px 'JetBrains Mono',monospace;color:var(--cyan)}
 .viz-card{position:relative;overflow:hidden;padding:0}
 .viz-card canvas,.viz-card svg{width:100%;display:block;background:#050810}
+.heatmap-card{padding:12px}
+.heatmap-controls{margin:0 0 10px}
+.segmented{display:inline-flex;border:1px solid var(--ink-low);border-radius:3px;overflow:hidden}
+.segmented button{border:0;border-right:1px solid var(--ink-low);border-radius:0;
+  background:var(--bg-3);color:var(--ink-soft);padding:5px 9px}
+.segmented button:last-child{border-right:0}
+.segmented button[aria-pressed=true]{background:var(--cyan);color:#050810}
+.heatmap-viewport{max-height:72vh;overflow:auto;background:#050810;border:1px solid var(--ink-low)}
+.heatmap-viewport svg{display:block;background:#050810;max-width:none}
 .viz-tip{position:absolute;left:0;top:0;z-index:4;pointer-events:none;max-width:300px;
   background:rgba(10,14,20,.94);border:1px solid var(--ink-low);border-radius:4px;
   color:var(--ink);font:12px 'JetBrains Mono',monospace;padding:7px 9px;
