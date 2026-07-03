@@ -136,6 +136,13 @@
       return '<dt>' + esc(k) + '</dt><dd class="cyan">' + fmt(counts[k]) +
              (d ? ' <span class="delta">' + (d > 0 ? '+' : '') + fmt(d) + '</span>' : '') + '</dd>';
     }).join('') + '<dt>pending</dt><dd>' + fmt(data.pending || 0) + '</dd>';
+    var pendingHealth = data.pending_health || {};
+    if (pendingHealth.horizon_mode) {
+      countHtml += '<dt>pending mode</dt><dd>' + esc(pendingHealth.horizon_mode) + '</dd>';
+    }
+    if (pendingHealth.estimated_minutes_to_zero !== undefined && pendingHealth.estimated_minutes_to_zero !== null) {
+      countHtml += '<dt>pending eta</dt><dd>' + fmt(pendingHealth.estimated_minutes_to_zero) + ' min</dd>';
+    }
     var drifters = (data.drifters || []).slice(0, 10).map(function (r) {
       return '<tr><td><code>L' + esc(r.label) + '</code></td><td>' +
              Number(r.drift || 0).toFixed(3) + '</td><td>' + fmt(r.size || 0) + '</td></tr>';
@@ -283,15 +290,13 @@
     var rows = (data.rules || []).map(function (r) {
       return '<tr><td>' + esc((r.antecedent || []).join(' & ')) + '</td><td class="muted">-></td><td>' +
              esc((r.consequent || []).join(' & ')) + '</td><td>' +
-             esc(r.sample_state || 'observed') + '</td><td>' +
-             Number(r.robust_progress || 0).toFixed(2) + '</td><td>' +
              (r.belief_score == null ? '' : Number(r.belief_score || 0).toFixed(2)) +
              '</td><td>' + Number(r.support || 0).toFixed(3) +
              '</td><td>' + Number(r.confidence || 0).toFixed(2) + '</td><td>' +
              Number(r.lift || 0).toFixed(2) + '</td></tr>';
     }).join('');
     var root = document.getElementById('rules-state');
-    if (root) root.innerHTML = '<div class="card">' + table(['if', '', 'then', 'state', 'robust', 'score', 'support', 'conf', 'lift'], rows) + '</div>';
+    if (root) root.innerHTML = '<div class="card">' + table(['if', '', 'then', 'score', 'support', 'conf', 'lift'], rows) + '</div>';
   }
 
   function renderHistory(data) {
@@ -701,39 +706,12 @@
   }
 
   // ── /heatmap ────────────────────────────────────────────────────────────
-  var heatMode = 'matrix';
-  var heatData = null;
-
   function startHeat() {
     var data = window.__HEAT__;
     var svg = document.getElementById('heat');
     if (!data || !svg) return;
-    heatData = data;
     drawHeat(data);
     startReplay('heatmap', data, drawHeat);
-    var zoom = document.getElementById('heat-zoom');
-    var output = document.getElementById('heat-zoom-output');
-    if (zoom) zoom.addEventListener('input', function () {
-      applyHeatZoom(Number(zoom.value || 100), output);
-    });
-    document.querySelectorAll('[data-heat-mode]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        heatMode = button.getAttribute('data-heat-mode') || 'matrix';
-        document.querySelectorAll('[data-heat-mode]').forEach(function (candidate) {
-          candidate.setAttribute('aria-pressed',
-            candidate.getAttribute('data-heat-mode') === heatMode ? 'true' : 'false');
-        });
-        drawHeat(heatData);
-      });
-    });
-  }
-
-  function applyHeatZoom(percent, output) {
-    var svg = document.getElementById('heat');
-    if (!svg) return;
-    var natural = Number(svg.getAttribute('data-natural-width') || 720);
-    svg.style.width = Math.max(320, natural * percent / 100) + 'px';
-    if (output) output.textContent = percent + '%';
   }
 
   function drawHeat(data) {
@@ -756,19 +734,9 @@
         return;
       }
     }
-    heatData = data;
-    if (heatMode === 'maze') {
-      drawHeatMaze(labels, M);
-      return;
-    }
-    var cell = n > 180 ? 8 : (n > 120 ? 10 : (n > 60 ? 14 : (n > 36 ? 20 : 36)));
-    var pad = n > 120 ? 48 : (n > 60 ? 56 : 64);
-    var natural = pad + n * cell + 20;
-    var labelStride = n > 200 ? 8 : (n > 140 ? 6 : (n > 90 ? 4 : (n > 60 ? 2 : 1)));
-    svg.setAttribute('viewBox', '0 0 ' + natural + ' ' + natural);
-    svg.setAttribute('data-natural-width', String(natural));
-    var zoom = document.getElementById('heat-zoom');
-    applyHeatZoom(Number(zoom && zoom.value || 100), document.getElementById('heat-zoom-output'));
+    var cell = n > 60 ? 16 : (n > 36 ? 20 : 36);
+    var pad = n > 60 ? 56 : 64;
+    svg.setAttribute('viewBox', '0 0 ' + (pad + n * cell + 20) + ' ' + (pad + n * cell + 20));
     var max = 0;
     for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
       var mv = Number(M[i][j] || 0);
@@ -778,11 +746,11 @@
     var parts = [];
     for (var i2 = 0; i2 < n; i2++) {
       var labelText = 'L' + esc(labels[i2]);
-      if (i2 % labelStride === 0) {
-        parts.push('<text x="' + (pad - 6) + '" y="' + (pad + i2 * cell + cell / 2 + 4) +
-                   '" text-anchor="end" font-family="JetBrains Mono" font-size="9" fill="#aab3bf">' + labelText + '</text>');
+      parts.push('<text x="' + (pad - 6) + '" y="' + (pad + i2 * cell + cell / 2 + 4) +
+                 '" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#aab3bf">' + labelText + '</text>');
+      if (n <= 60 || i2 % 2 === 0) {
         parts.push('<text x="' + (pad + i2 * cell + cell / 2) + '" y="' + (pad - 6) +
-                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#aab3bf">' + labelText + '</text>');
+                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#aab3bf">' + labelText + '</text>');
       }
     }
     for (var i3 = 0; i3 < n; i3++) for (var j3 = 0; j3 < n; j3++) {
@@ -800,89 +768,10 @@
     svg.innerHTML = parts.join('');
   }
 
-  function drawHeatMaze(labels, M) {
-    var svg = document.getElementById('heat');
-    var n = labels.length;
-    var cols = Math.ceil(Math.sqrt(n));
-    var rows = Math.ceil(n / cols);
-    var cell = n > 180 ? 30 : (n > 100 ? 36 : 48);
-    var pad = 36;
-    var width = pad * 2 + cols * cell;
-    var height = pad * 2 + rows * cell;
-    var visited = new Array(n).fill(false);
-    var best = new Array(n).fill(-1);
-    var parent = new Array(n).fill(-1);
-    best[0] = 0;
-    for (var step = 0; step < n; step++) {
-      var node = -1;
-      for (var pick = 0; pick < n; pick++) {
-        if (!visited[pick] && (node < 0 || best[pick] > best[node])) node = pick;
-      }
-      if (node < 0) break;
-      visited[node] = true;
-      for (var next = 0; next < n; next++) {
-        var weight = Number(M[node][next] || 0);
-        if (!visited[next] && weight > best[next]) {
-          best[next] = weight;
-          parent[next] = node;
-        }
-      }
-    }
-    function point(index) {
-      var row = Math.floor(index / cols);
-      var logical = index % cols;
-      var col = row % 2 ? cols - logical - 1 : logical;
-      return { x: pad + col * cell + cell / 2, y: pad + row * cell + cell / 2 };
-    }
-    var max = Math.max.apply(null, best.concat([1]));
-    var parts = [];
-    for (var edge = 1; edge < n; edge++) {
-      var from = point(parent[edge] < 0 ? edge - 1 : parent[edge]);
-      var to = point(edge);
-      var middle = (from.x + to.x) / 2;
-      var strength = Math.max(0, Number(best[edge] || 0)) / max;
-      parts.push('<path d="M' + from.x + ' ' + from.y + 'H' + middle +
-                 'V' + to.y + 'H' + to.x + '" fill="none" stroke="' +
-                 (strength > 0.5 ? '#58e6d9' : '#536070') +
-                 '" stroke-width="' + (1.5 + strength * 4).toFixed(1) +
-                 '" stroke-linecap="round"><title>L' +
-                 esc(labels[parent[edge] < 0 ? edge - 1 : parent[edge]]) +
-                 ' ↔ L' + esc(labels[edge]) + ' · ' +
-                 Math.max(0, Number(best[edge] || 0)) + '</title></path>');
-    }
-    var stride = n > 160 ? 8 : (n > 80 ? 4 : (n > 40 ? 2 : 1));
-    for (var i = 0; i < n; i++) {
-      var p = point(i);
-      parts.push('<rect x="' + (p.x - cell * 0.28).toFixed(1) +
-                 '" y="' + (p.y - cell * 0.28).toFixed(1) +
-                 '" width="' + (cell * 0.56).toFixed(1) +
-                 '" height="' + (cell * 0.56).toFixed(1) +
-                 '" rx="2" fill="#111923" stroke="' +
-                 (i === 0 ? '#5be084' : (i === n - 1 ? '#f0a050' : '#58e6d9')) +
-                 '"><title>L' + esc(labels[i]) + '</title></rect>');
-      if (i % stride === 0) {
-        parts.push('<text x="' + p.x + '" y="' + (p.y + 3) +
-                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#e8ecf1">L' +
-                   esc(labels[i]) + '</text>');
-      }
-    }
-    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
-    svg.setAttribute('data-natural-width', String(width));
-    applyHeatZoom(Number(document.getElementById('heat-zoom').value || 100),
-                  document.getElementById('heat-zoom-output'));
-    svg.innerHTML = parts.join('');
-  }
-
   // ── /monitor ────────────────────────────────────────────────────────────
   function startMonitor() {
     var data = window.__MONITOR__;
     if (!data || !document.getElementById('monitor-state')) return;
-    renderMonitor(data);
-    var replayBox = document.querySelector('[data-replay="ingestion"]');
-    startReplay(replayBox ? 'ingestion' : 'monitor', data, renderMonitor);
-  }
-
-  function renderMonitor(data) {
     drawTimeSeries('monitor-queue', data.queue && data.queue.series || [], [
       { key: 'active', label: 'active', color: '#58e6d9' },
       { key: 'incoming', label: 'incoming', color: '#a78bff' },
@@ -891,7 +780,6 @@
     var qc = data.queue && data.queue.counts || {};
     setMonitorMeta('queue', ['queued ' + fmt(qc.queued || 0), 'done ' + fmt(qc.done || 0),
       'published ' + fmt(qc.published || 0), 'failed ' + fmt(qc.failed || 0)]);
-    renderController(data.controller || {});
     drawBars('monitor-waterfall', data.waterfall || [], 'stage', 'n', '#58e6d9');
     setMonitorMeta('waterfall', (data.waterfall || []).slice(-3).map(function (r) {
       return r.stage + ' ' + fmt(r.n || 0);
@@ -921,63 +809,6 @@
     setMonitorMeta('bridges', ['entities ' + fmt(bridgeLast.entities || 0),
       'components ' + fmt(bridgeLast.components || 0), 'bridges ' + fmt(bridgeLast.bridges || 0)]);
     renderMonitorTables(data);
-  }
-
-  function renderController(controller) {
-    var root = document.querySelector('[data-controller-state]');
-    if (!root) return;
-    var eta = controller.estimated_minutes_to_zero;
-    var rows = [
-      ['selected', fmt(controller.limit || 0)],
-      ['required', fmt(controller.required_limit || 0)],
-      ['keep up', fmt(controller.keep_up_cap || 0)],
-      ['surplus', fmt(controller.surplus_cap || 0)],
-      ['horizon', controller.horizon_mode || 'unknown'],
-      ['zero ETA', eta === null || eta === undefined ? 'unavailable' : fmt(eta) + ' min'],
-      ['path to zero', controller.has_path_to_zero ? 'yes' : 'no']
-    ];
-    root.innerHTML = rows.map(function (row) {
-      return '<dt>' + esc(row[0]) + '</dt><dd>' + esc(row[1]) + '</dd>';
-    }).join('');
-  }
-
-  function startStorage() {
-    var data = window.__STORAGE__;
-    if (!data || !document.getElementById('storage-state')) return;
-    startReplay('storage', data, renderStorage);
-  }
-
-  function renderStorage(data) {
-    var root = document.getElementById('storage-state');
-    if (!root) return;
-    var active = data.active_counts || {};
-    var queue = data.queue_counts || {};
-    var archives = data.archive_manifest || [];
-    var rows = archives.map(function (r) {
-      return '<tr><td>' + esc(r.year || '') + '</td><td>' + fmt(r.item_count || 0) +
-        '</td><td>' + fmt(r.embedding_count || 0) + '</td><td>' +
-        esc(r.restore_status || '') + '</td></tr>';
-    }).join('');
-    root.innerHTML =
-      '<div class="cards"><div class="card"><h3>active corpus</h3><dl class="kv">' +
-      '<dt>items</dt><dd>' + fmt(active.items || 0) + '</dd>' +
-      '<dt>embeddings</dt><dd>' + fmt(active.embeddings || 0) + '</dd>' +
-      '<dt>rules</dt><dd>' + fmt(active.rules || 0) + '</dd>' +
-      '<dt>queue</dt><dd>' + fmt(active.queue || 0) + '</dd></dl></div>' +
-      '<div class="card"><h3>storage</h3><dl class="kv">' +
-      '<dt>database</dt><dd>' + fmtBytes(data.db_bytes || 0) + '</dd>' +
-      '<dt>disk free</dt><dd>' + fmtBytes(data.disk_free_bytes || 0) + '</dd>' +
-      '<dt>disk used</dt><dd>' + pct(data.disk_used_ratio || 0) + '</dd>' +
-      '<dt>queued</dt><dd>' + fmt(queue.queued || 0) + '</dd></dl></div></div>' +
-      '<div class="card table-card"><h3>corpus archives</h3>' +
-      (rows ? table(['year', 'items', 'embeddings', 'restore'], rows) :
-        '<p class="muted">no corpus archives yet</p>') + '</div>';
-  }
-
-  function fmtBytes(n) {
-    var value = Number(n || 0), units = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0;
-    while (value >= 1024 && i < units.length - 1) { value /= 1024; i += 1; }
-    return (i ? value.toFixed(2) : Math.round(value)) + ' ' + units[i];
   }
 
   function setMonitorMeta(key, parts) {
@@ -1169,6 +1000,5 @@
     startGraph();
     startHeat();
     startMonitor();
-    startStorage();
   }
 })();
