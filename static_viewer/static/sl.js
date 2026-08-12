@@ -375,6 +375,8 @@
       '</div><div class="card wide table-card"><h3>archive readiness</h3>' +
       (archiveRows ? table(['year', 'pass', 'items', 'compressed', 'restore', 'ipfs'], archiveRows) : '<p class="muted">no verified corpus archives yet</p>') +
       '</div></div>';
+    var map = root.querySelector('.ipfs-map');
+    if (map) attachSvgViewport(map, ensureVizTip(map, 'ipfs-tip'));
   }
 
   function shortHash(value, n) {
@@ -391,11 +393,189 @@
     return i === 0 ? String(Math.round(value)) + ' ' + units[i] : value.toFixed(2) + ' ' + units[i];
   }
 
+  // Shared zero-dependency viewport. The authored viewBox is always the
+  // fit-to-view baseline; interaction changes only the visible viewBox.
+  function svgBox(svg) {
+    var values = String(svg.getAttribute('viewBox') || '0 0 1 1')
+      .trim().split(/[\s,]+/).map(Number);
+    if (values.length !== 4 || values.some(function (v) { return !isFinite(v); }) ||
+        values[2] <= 0 || values[3] <= 0) return { x: 0, y: 0, w: 1, h: 1 };
+    return { x: values[0], y: values[1], w: values[2], h: values[3] };
+  }
+
+  function ensureVizTip(svg, id) {
+    var parent = svg && svg.parentElement;
+    if (!parent) return null;
+    var tip = document.getElementById(id);
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = id;
+      tip.className = 'viz-tip hidden';
+      parent.appendChild(tip);
+    }
+    if (window.getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    return tip;
+  }
+
+  function bindSvgTip(svg, tip) {
+    if (!tip || svg._slTipAttached) return;
+    svg._slTipAttached = true;
+    function hide() { tip.classList.add('hidden'); }
+    function show(e) {
+      if (svg._slDragging) return hide();
+      var target = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+      if (!target || !svg.contains(target)) return hide();
+      var box = svg.getBoundingClientRect();
+      tip.innerHTML = esc(target.getAttribute('data-tip') || '').replace(/\n/g, '<br>');
+      tip.style.left = Math.max(0, Math.min(box.width - 260, e.clientX - box.left)) + 'px';
+      tip.style.top = Math.max(0, Math.min(box.height - 110, e.clientY - box.top)) + 'px';
+      tip.classList.remove('hidden');
+    }
+    svg.addEventListener('pointermove', show);
+    svg.addEventListener('pointerleave', hide);
+    svg.addEventListener('pointerdown', hide);
+  }
+
+  function attachSvgViewport(svg, tip) {
+    if (!svg) return null;
+    if (svg._slViewport) {
+      bindSvgTip(svg, tip);
+      return svg._slViewport;
+    }
+    var base = svgBox(svg);
+    var view = { x: base.x, y: base.y, w: base.w, h: base.h };
+    var scale = 1;
+    var points = {};
+    var drag = null;
+    var pinch = null;
+    function clamp(v) { return Math.max(0.5, Math.min(12, v)); }
+    function commit() {
+      svg.setAttribute('viewBox', [view.x, view.y, view.w, view.h].join(' '));
+    }
+    function screenPoint(clientX, clientY, box) {
+      box = box || svg.getBoundingClientRect();
+      return {
+        x: view.x + ((clientX - box.left) / Math.max(1, box.width)) * view.w,
+        y: view.y + ((clientY - box.top) / Math.max(1, box.height)) * view.h
+      };
+    }
+    function setScale(next, clientX, clientY) {
+      next = clamp(Number(next) || 1);
+      var box = svg.getBoundingClientRect();
+      var sx = clientX === undefined ? box.left + box.width / 2 : clientX;
+      var sy = clientY === undefined ? box.top + box.height / 2 : clientY;
+      var anchor = screenPoint(sx, sy, box);
+      var rx = (sx - box.left) / Math.max(1, box.width);
+      var ry = (sy - box.top) / Math.max(1, box.height);
+      view.w = base.w / next;
+      view.h = base.h / next;
+      view.x = anchor.x - rx * view.w;
+      view.y = anchor.y - ry * view.h;
+      scale = next;
+      commit();
+    }
+    function fit() {
+      scale = 1;
+      view = { x: base.x, y: base.y, w: base.w, h: base.h };
+      commit();
+    }
+    function rebase(reset) {
+      base = svgBox(svg);
+      if (reset !== false) fit();
+    }
+    function pointerList() {
+      return Object.keys(points).map(function (key) { return points[key]; });
+    }
+    function startPinch() {
+      var pair = pointerList();
+      if (pair.length < 2) return;
+      var box = svg.getBoundingClientRect();
+      var cx = (pair[0].x + pair[1].x) / 2;
+      var cy = (pair[0].y + pair[1].y) / 2;
+      pinch = {
+        distance: Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1,
+        scale: scale,
+        anchor: screenPoint(cx, cy, box)
+      };
+      drag = null;
+    }
+    svg.style.touchAction = 'none';
+    svg.style.cursor = 'grab';
+    if (!svg.hasAttribute('tabindex')) svg.setAttribute('tabindex', '0');
+    svg.setAttribute('title', 'Drag to pan; wheel or pinch to zoom; double-click or press 0 to fit');
+    svg.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.14 : 1 / 1.14), e.clientX, e.clientY);
+    }, { passive: false });
+    svg.addEventListener('pointerdown', function (e) {
+      points[e.pointerId] = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      svg._slDragging = true;
+      svg.style.cursor = 'grabbing';
+      if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
+      if (pointerList().length > 1) startPinch();
+      else drag = { x: e.clientX, y: e.clientY, view: { x: view.x, y: view.y, w: view.w, h: view.h } };
+    });
+    svg.addEventListener('pointermove', function (e) {
+      var point = points[e.pointerId];
+      if (!point) return;
+      point.x = e.clientX; point.y = e.clientY;
+      var pair = pointerList();
+      var box = svg.getBoundingClientRect();
+      if (pair.length > 1) {
+        if (!pinch) startPinch();
+        var cx = (pair[0].x + pair[1].x) / 2;
+        var cy = (pair[0].y + pair[1].y) / 2;
+        var distance = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1;
+        scale = clamp(pinch.scale * distance / pinch.distance);
+        view.w = base.w / scale; view.h = base.h / scale;
+        view.x = pinch.anchor.x - ((cx - box.left) / Math.max(1, box.width)) * view.w;
+        view.y = pinch.anchor.y - ((cy - box.top) / Math.max(1, box.height)) * view.h;
+        commit();
+      } else if (drag) {
+        view.x = drag.view.x - (e.clientX - drag.x) * drag.view.w / Math.max(1, box.width);
+        view.y = drag.view.y - (e.clientY - drag.y) * drag.view.h / Math.max(1, box.height);
+        commit();
+      }
+    });
+    function endPointer(e) {
+      delete points[e.pointerId];
+      var pair = pointerList();
+      pinch = null;
+      if (pair.length === 1) {
+        drag = { x: pair[0].x, y: pair[0].y, view: { x: view.x, y: view.y, w: view.w, h: view.h } };
+      } else {
+        drag = null;
+        svg._slDragging = false;
+        svg.style.cursor = 'grab';
+      }
+    }
+    svg.addEventListener('pointerup', endPointer);
+    svg.addEventListener('pointercancel', endPointer);
+    svg.addEventListener('dblclick', function (e) { e.preventDefault(); fit(); });
+    svg.addEventListener('keydown', function (e) {
+      var handled = true;
+      if (e.key === '0' || e.key === 'Home') fit();
+      else if (e.key === '+' || e.key === '=') setScale(scale * 1.2);
+      else if (e.key === '-' || e.key === '_') setScale(scale / 1.2);
+      else if (e.key === 'ArrowLeft') { view.x -= view.w * 0.08; commit(); }
+      else if (e.key === 'ArrowRight') { view.x += view.w * 0.08; commit(); }
+      else if (e.key === 'ArrowUp') { view.y -= view.h * 0.08; commit(); }
+      else if (e.key === 'ArrowDown') { view.y += view.h * 0.08; commit(); }
+      else handled = false;
+      if (handled) e.preventDefault();
+    });
+    var api = { fit: fit, rebase: rebase, setScale: setScale };
+    svg._slViewport = api;
+    bindSvgTip(svg, tip);
+    fit();
+    return api;
+  }
+
   function ipfsMap(data) {
     var cells = data.cells || [];
     var archives = (data.archives || []).filter(function (a) { return !a.has_ipfs_cell; });
-    var nodes = cells.length ? cells : archives;
-    var w = 960, h = 320, cx = w / 2, cy = h / 2;
+    var nodes = cells.concat(archives);
+    var w = 960, h = 520, cx = w / 2, cy = h / 2;
     if (!nodes.length) {
       return '<svg class="ipfs-map" viewBox="0 0 ' + w + ' ' + h + '" role="img">' +
         '<rect width="' + w + '" height="' + h + '" fill="#050810"/>' +
@@ -404,12 +584,15 @@
     }
     var parts = [
       '<rect width="' + w + '" height="' + h + '" fill="#050810"/>',
+      '<circle cx="' + cx + '" cy="' + cy + '" r="90" fill="none" stroke="rgba(120,200,220,.08)"/>',
+      '<circle cx="' + cx + '" cy="' + cy + '" r="150" fill="none" stroke="rgba(120,200,220,.06)"/>',
+      '<circle cx="' + cx + '" cy="' + cy + '" r="205" fill="none" stroke="rgba(120,200,220,.04)"/>',
       '<circle cx="' + cx + '" cy="' + cy + '" r="36" fill="rgba(88,230,217,.10)" stroke="#58e6d9"/>',
       '<text x="' + cx + '" y="' + (cy + 5) + '" fill="#58e6d9" text-anchor="middle" font-size="12">archive root</text>'
     ];
     nodes.forEach(function (node, i) {
-      var angle = (Math.PI * 2 * i / Math.max(nodes.length, 1)) - 1.5708;
-      var radius = 98 + (i % 3) * 34;
+      var angle = i * 2.399963229728653 - 1.5708;
+      var radius = 72 + 133 * Math.sqrt((i + 0.5) / Math.max(nodes.length, 1));
       var x = cx + radius * Math.cos(angle);
       var y = cy + radius * Math.sin(angle);
       var hasCid = Object.prototype.hasOwnProperty.call(node, 'cid');
@@ -418,9 +601,22 @@
       var color = hasCid ? (verified && pinned ? '#5be084' : pinned ? '#f0a050' : '#e85a7a') : '#6b7684';
       var label = hasCid ? (String(node.year || '') + ' ' + shortHash(node.cid, 10)) : (String(node.year || '') + ' archive only');
       var size = hasCid ? Math.max(7, Math.min(24, 7 + String(Number(node.encrypted_bytes || 0).toString(2)).length / 2)) : 8;
+      var tip = hasCid ?
+        String(node.year || 'unknown year') + ' · pass ' + String(node.pass_no || '-') +
+          '\nCID ' + String(node.cid || '-') + '\npin ' + String(node.pin_status || 'unknown') +
+          '\nrestore ' + String(node.restore_status || 'missing') +
+          '\nencrypted ' + fmtBytes(node.encrypted_bytes || 0) +
+          '\nsource ' + fmtBytes(node.source_bytes || 0) +
+          '\nlast check ' + String(node.last_pin_check_at || '-') :
+        String(node.year || 'unknown year') + ' · pass ' + String(node.pass_no || '-') +
+          '\narchive only\nitems ' + fmt(node.item_count || 0) +
+          '\ncompressed ' + fmtBytes(node.compressed_bytes || 0) +
+          '\nrestore ' + String(node.restore_status || 'missing');
       parts.push('<line x1="' + cx.toFixed(1) + '" y1="' + cy.toFixed(1) + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="rgba(120,200,220,.18)"/>');
-      parts.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="' + color + '" fill-opacity=".82" stroke="#e8ecf1" stroke-opacity=".25"/>');
-      parts.push('<text x="' + x.toFixed(1) + '" y="' + (y + size + 16).toFixed(1) + '" fill="#aab3bf" text-anchor="middle" font-size="11">' + esc(label) + '</text>');
+      parts.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="' + color + '" fill-opacity=".82" stroke="#e8ecf1" stroke-opacity=".25" vector-effect="non-scaling-stroke" data-tip="' + esc(tip) + '"><title>' + esc(tip) + '</title></circle>');
+      if (nodes.length <= 20 || i < 12) {
+        parts.push('<text x="' + x.toFixed(1) + '" y="' + (y + size + 16).toFixed(1) + '" fill="#aab3bf" text-anchor="middle" font-size="11" pointer-events="none">' + esc(label) + '</text>');
+      }
     });
     return '<svg class="ipfs-map" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="IPFS archive constellation">' + parts.join('') + '</svg>';
   }
@@ -433,7 +629,8 @@
     var ctx = cv.getContext('2d');
     var tip = document.getElementById('scatter-tip');
     var ax = 0.4, ay = -0.6, autoSpin = true, raf = null;
-    var dragging = false, lx = 0, ly = 0;
+    var zoom = 1, panX = 0, panY = 0, spinTimer = null;
+    var gesturePoints = {}, pinch = null;
     var hover = null, lastDrawn = [];
     var palette = ['#58e6d9', '#a78bff', '#f0a050', '#5be084', '#e85a7a',
                    '#7ab8ff', '#d8c060', '#a0e0a0'];
@@ -462,9 +659,12 @@
     function showTip(m, p) {
       if (!tip || !p) return;
       tip.innerHTML = '<b>#' + esc(p.id) + '</b><br>cluster L' + esc(p.k) +
-        '<br>source ' + esc(p.source_id);
+        '<br>source ' + esc(p.source_id) +
+        '<br>PC1 ' + Number(p.x || 0).toFixed(3) +
+        ' · PC2 ' + Number(p.y || 0).toFixed(3) +
+        ' · PC3 ' + Number(p.z || 0).toFixed(3);
       tip.style.left = Math.max(0, Math.min(cv.clientWidth - 220, m.x)) + 'px';
-      tip.style.top = Math.max(0, Math.min(cv.clientHeight - 90, m.y)) + 'px';
+      tip.style.top = Math.max(0, Math.min(cv.clientHeight - 125, m.y)) + 'px';
       tip.classList.remove('hidden');
     }
     function pointer(e) {
@@ -508,7 +708,8 @@
       if (autoSpin) ay += 0.0028;
       var W = cv.clientWidth, H = cv.clientHeight;
       ctx.clearRect(0, 0, W, H);
-      var cx = W * 0.5, cy = H * 0.5, scale = Math.min(W, H) * 0.34;
+      var cx = W * 0.5 + panX, cy = H * 0.5 + panY;
+      var scale = Math.min(W, H) * 0.34 * zoom;
       ctx.strokeStyle = 'rgba(120,200,220,0.08)';
       ctx.lineWidth = 1;
       for (var ring = 1; ring <= 3; ring++) {
@@ -536,7 +737,7 @@
         var depth = (q.z + 1) / 2;
         ctx.fillStyle = colorFor(q.k);
         ctx.globalAlpha = 0.35 + depth * 0.55;
-        var radius = 1.4 + depth * 3.2;
+        var radius = (1.4 + depth * 3.2) * Math.min(1.8, Math.sqrt(zoom));
         ctx.beginPath(); ctx.arc(px, py, radius, 0, Math.PI * 2); ctx.fill();
         lastDrawn.push({ sx: px, sy: py, r: radius, p: q.p });
       });
@@ -553,26 +754,107 @@
     }
     raf = requestAnimationFrame(draw);
     startReplay('scatter', data, function (next) { setScatter(next); hideTip(); });
-    cv.addEventListener('mousedown', function (e) { dragging = true; autoSpin = false; lx = e.clientX; ly = e.clientY; });
-    window.addEventListener('mouseup', function () { if (dragging) { dragging = false; setTimeout(function () { autoSpin = true; }, 1500); } });
-    window.addEventListener('mousemove', function (e) {
-      if (!dragging) return;
-      ay += (e.clientX - lx) * 0.01; ax += (e.clientY - ly) * 0.01;
-      lx = e.clientX; ly = e.clientY;
+    function clampZoom(value) { return Math.max(0.35, Math.min(8, value)); }
+    function gestureList() {
+      return Object.keys(gesturePoints).map(function (key) { return gesturePoints[key]; });
+    }
+    function pauseSpin() {
+      clearTimeout(spinTimer);
+      autoSpin = false;
+    }
+    function resumeSpin() {
+      clearTimeout(spinTimer);
+      spinTimer = setTimeout(function () { autoSpin = true; }, 1500);
+    }
+    function resetView() {
+      zoom = 1; panX = 0; panY = 0; ax = 0.4; ay = -0.6;
+      hideTip();
+    }
+    function startScatterPinch() {
+      var pair = gestureList();
+      if (pair.length < 2) return;
+      pinch = {
+        distance: Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1,
+        x: (pair[0].x + pair[1].x) / 2,
+        y: (pair[0].y + pair[1].y) / 2,
+        zoom: zoom,
+        panX: panX,
+        panY: panY
+      };
+    }
+    cv.style.touchAction = 'none';
+    if (!cv.hasAttribute('tabindex')) cv.setAttribute('tabindex', '0');
+    cv.setAttribute('title', 'Drag to rotate; shift-drag to pan; wheel or pinch to zoom; double-click or press 0 to fit');
+    cv.addEventListener('pointerdown', function (e) {
+      pauseSpin(); hideTip();
+      gesturePoints[e.pointerId] = {
+        x: e.clientX, y: e.clientY,
+        mode: (e.shiftKey || e.button === 1 || e.button === 2) ? 'pan' : 'rotate'
+      };
+      if (cv.setPointerCapture) cv.setPointerCapture(e.pointerId);
+      if (gestureList().length > 1) startScatterPinch();
     });
-    cv.addEventListener('mousemove', updateHover);
-    cv.addEventListener('mouseleave', hideTip);
-    cv.addEventListener('touchstart', function (e) {
-      dragging = true; autoSpin = false; var t = e.touches[0]; lx = t.clientX; ly = t.clientY;
-    }, { passive: true });
-    cv.addEventListener('touchmove', function (e) {
-      if (!dragging) return;
-      var t = e.touches[0];
-      ay += (t.clientX - lx) * 0.01; ax += (t.clientY - ly) * 0.01;
-      lx = t.clientX; ly = t.clientY;
-      e.preventDefault();
+    cv.addEventListener('pointermove', function (e) {
+      var point = gesturePoints[e.pointerId];
+      if (!point) return updateHover(e);
+      var oldX = point.x, oldY = point.y;
+      point.x = e.clientX; point.y = e.clientY;
+      var pair = gestureList();
+      if (pair.length > 1) {
+        if (!pinch) startScatterPinch();
+        var centerX = (pair[0].x + pair[1].x) / 2;
+        var centerY = (pair[0].y + pair[1].y) / 2;
+        var distance = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1;
+        var next = clampZoom(pinch.zoom * distance / pinch.distance);
+        var ratio = next / pinch.zoom;
+        var rect = cv.getBoundingClientRect();
+        var baseCenterX = rect.left + cv.clientWidth / 2 + pinch.panX;
+        var baseCenterY = rect.top + cv.clientHeight / 2 + pinch.panY;
+        panX = centerX - rect.left - cv.clientWidth / 2 - (pinch.x - baseCenterX) * ratio;
+        panY = centerY - rect.top - cv.clientHeight / 2 - (pinch.y - baseCenterY) * ratio;
+        zoom = next;
+      } else if (point.mode === 'pan') {
+        panX += e.clientX - oldX; panY += e.clientY - oldY;
+      } else {
+        ay += (e.clientX - oldX) * 0.01; ax += (e.clientY - oldY) * 0.01;
+      }
+    });
+    function endScatterPointer(e) {
+      delete gesturePoints[e.pointerId];
+      pinch = null;
+      if (gestureList().length > 1) startScatterPinch();
+      if (!gestureList().length) resumeSpin();
+    }
+    cv.addEventListener('pointerup', endScatterPointer);
+    cv.addEventListener('pointercancel', endScatterPointer);
+    cv.addEventListener('pointerleave', function () {
+      if (!gestureList().length) hideTip();
+    });
+    cv.addEventListener('wheel', function (e) {
+      e.preventDefault(); pauseSpin();
+      var m = pointer(e);
+      var old = zoom;
+      var next = clampZoom(zoom * (e.deltaY < 0 ? 1.14 : 1 / 1.14));
+      var centerX = cv.clientWidth / 2 + panX;
+      var centerY = cv.clientHeight / 2 + panY;
+      panX = m.x - cv.clientWidth / 2 - (m.x - centerX) * next / old;
+      panY = m.y - cv.clientHeight / 2 - (m.y - centerY) * next / old;
+      zoom = next; resumeSpin();
     }, { passive: false });
-    cv.addEventListener('touchend', function () { dragging = false; setTimeout(function () { autoSpin = true; }, 1500); });
+    cv.addEventListener('dblclick', function (e) { e.preventDefault(); resetView(); });
+    cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    cv.addEventListener('keydown', function (e) {
+      var handled = true;
+      if (e.key === '0' || e.key === 'Home') resetView();
+      else if (e.key === '+' || e.key === '=') zoom = clampZoom(zoom * 1.2);
+      else if (e.key === '-' || e.key === '_') zoom = clampZoom(zoom / 1.2);
+      else if (e.key === 'ArrowLeft') panX -= 24;
+      else if (e.key === 'ArrowRight') panX += 24;
+      else if (e.key === 'ArrowUp') panY -= 24;
+      else if (e.key === 'ArrowDown') panY += 24;
+      else handled = false;
+      if (handled) { e.preventDefault(); pauseSpin(); resumeSpin(); }
+    });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && raf) { cancelAnimationFrame(raf); raf = null; }
       if (!document.hidden && !raf) raf = requestAnimationFrame(draw);
@@ -584,23 +866,8 @@
     var data = window.__GRAPH__;
     var svg = document.getElementById('g');
     if (!data || !svg) return;
-    var tip = document.getElementById('graph-tip');
-    if (!svg._slTipAttached) {
-      svg._slTipAttached = true;
-      svg.addEventListener('mousemove', function (e) {
-        var t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
-        if (!t || !tip) return;
-        var box = svg.getBoundingClientRect();
-        tip.innerHTML = esc(t.getAttribute('data-tip') || '').replace(/\n/g, '<br>');
-        tip.style.left = Math.max(0, Math.min(box.width - 260, e.clientX - box.left)) + 'px';
-        tip.style.top = Math.max(0, Math.min(box.height - 90, e.clientY - box.top)) + 'px';
-        tip.classList.remove('hidden');
-      });
-      svg.addEventListener('mouseleave', function () {
-        if (tip) tip.classList.add('hidden');
-      });
-    }
     drawGraph(data);
+    attachSvgViewport(svg, ensureVizTip(svg, 'graph-tip'));
     startReplay('graph', data, drawGraph);
   }
 
@@ -697,7 +964,7 @@
       var label = Number(n.rank || 9999) <= 18 || nodes.length <= 32;
       var tip = n.id + '\nrank ' + n.rank + '\nscore ' + score.toFixed(4) +
         '\ncomponent ' + comp;
-      parts.push('<g transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')">' +
+      parts.push('<g transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')" data-tip="' + esc(tip) + '">' +
                  '<circle r="' + (r + 5).toFixed(1) + '" fill="' + col + '" fill-opacity="0.05"/>' +
                  '<circle r="' + r.toFixed(1) + '" fill="' + col + '" fill-opacity="0.18" stroke="' + col +
                  '" stroke-width="1.5" data-tip="' + esc(tip) + '"/>' +
@@ -719,6 +986,8 @@
     if (!data || !svg) return;
     heatData = data;
     drawHeat(data);
+    attachSvgViewport(svg, ensureVizTip(svg, 'heat-tip'));
+    syncHeatViewport(svg);
     startReplay('heatmap', data, drawHeat);
     var zoom = document.getElementById('heat-zoom');
     var output = document.getElementById('heat-zoom-output');
@@ -740,9 +1009,16 @@
   function applyHeatZoom(percent, output) {
     var svg = document.getElementById('heat');
     if (!svg) return;
-    var natural = Number(svg.getAttribute('data-natural-width') || 720);
-    svg.style.width = Math.max(320, natural * percent / 100) + 'px';
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+    if (svg._slViewport) svg._slViewport.setScale(percent / 100);
     if (output) output.textContent = percent + '%';
+  }
+
+  function syncHeatViewport(svg) {
+    if (svg._slViewport) svg._slViewport.rebase(true);
+    var zoom = document.getElementById('heat-zoom');
+    applyHeatZoom(Number(zoom && zoom.value || 100), document.getElementById('heat-zoom-output'));
   }
 
   function drawHeat(data) {
@@ -776,8 +1052,6 @@
     var labelStride = n > 200 ? 8 : (n > 140 ? 6 : (n > 90 ? 4 : (n > 60 ? 2 : 1)));
     svg.setAttribute('viewBox', '0 0 ' + natural + ' ' + natural);
     svg.setAttribute('data-natural-width', String(natural));
-    var zoom = document.getElementById('heat-zoom');
-    applyHeatZoom(Number(zoom && zoom.value || 100), document.getElementById('heat-zoom-output'));
     var max = 0;
     for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
       var mv = Number(M[i][j] || 0);
@@ -798,15 +1072,17 @@
       var v = Math.max(0, Number(M[i3][j3] || 0));
       var t = v / max;
       var fill = v === 0 ? '#0a0e14' : 'rgba(88,230,217,' + (0.08 + t * 0.85).toFixed(2) + ')';
+      var tip = 'L' + labels[i3] + ' ↔ L' + labels[j3] + '\nco-occurrence ' + v;
       parts.push('<rect x="' + (pad + j3 * cell) + '" y="' + (pad + i3 * cell) +
                  '" width="' + (cell - 2) + '" height="' + (cell - 2) +
-                 '" fill="' + fill + '"><title>L' + esc(labels[i3]) + ' ↔ L' + esc(labels[j3]) + ' · ' + v + '</title></rect>');
+                 '" fill="' + fill + '" data-tip="' + esc(tip) + '"><title>' + esc(tip) + '</title></rect>');
       if (t > 0.5 && cell >= 20) {
         parts.push('<text x="' + (pad + j3 * cell + cell / 2) + '" y="' + (pad + i3 * cell + cell / 2 + 4) +
-                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#050810">' + v + '</text>');
+                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#050810" pointer-events="none">' + v + '</text>');
       }
     }
     svg.innerHTML = parts.join('');
+    syncHeatViewport(svg);
   }
 
   function drawHeatMaze(labels, M) {
@@ -850,36 +1126,36 @@
       var to = point(edge);
       var middle = (from.x + to.x) / 2;
       var strength = Math.max(0, Number(best[edge] || 0)) / max;
+      var tip = 'L' + labels[parent[edge] < 0 ? edge - 1 : parent[edge]] +
+        ' ↔ L' + labels[edge] + '\nstrength ' + Math.max(0, Number(best[edge] || 0));
       parts.push('<path d="M' + from.x + ' ' + from.y + 'H' + middle +
                  'V' + to.y + 'H' + to.x + '" fill="none" stroke="' +
                  (strength > 0.5 ? '#58e6d9' : '#536070') +
                  '" stroke-width="' + (1.5 + strength * 4).toFixed(1) +
-                 '" stroke-linecap="round"><title>L' +
-                 esc(labels[parent[edge] < 0 ? edge - 1 : parent[edge]]) +
-                 ' ↔ L' + esc(labels[edge]) + ' · ' +
-                 Math.max(0, Number(best[edge] || 0)) + '</title></path>');
+                 '" stroke-linecap="round" data-tip="' + esc(tip) + '"><title>' +
+                 esc(tip) + '</title></path>');
     }
     var stride = n > 160 ? 8 : (n > 80 ? 4 : (n > 40 ? 2 : 1));
     for (var i = 0; i < n; i++) {
       var p = point(i);
+      var nodeTip = 'cluster L' + labels[i] + '\nmaze node ' + (i + 1) + ' of ' + n;
       parts.push('<rect x="' + (p.x - cell * 0.28).toFixed(1) +
                  '" y="' + (p.y - cell * 0.28).toFixed(1) +
                  '" width="' + (cell * 0.56).toFixed(1) +
                  '" height="' + (cell * 0.56).toFixed(1) +
                  '" rx="2" fill="#111923" stroke="' +
                  (i === 0 ? '#5be084' : (i === n - 1 ? '#f0a050' : '#58e6d9')) +
-                 '"><title>L' + esc(labels[i]) + '</title></rect>');
+                 '" data-tip="' + esc(nodeTip) + '"><title>' + esc(nodeTip) + '</title></rect>');
       if (i % stride === 0) {
         parts.push('<text x="' + p.x + '" y="' + (p.y + 3) +
-                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#e8ecf1">L' +
+                   '" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#e8ecf1" pointer-events="none">L' +
                    esc(labels[i]) + '</text>');
       }
     }
     svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
     svg.setAttribute('data-natural-width', String(width));
-    applyHeatZoom(Number(document.getElementById('heat-zoom').value || 100),
-                  document.getElementById('heat-zoom-output'));
     svg.innerHTML = parts.join('');
+    syncHeatViewport(svg);
   }
 
   // ── /monitor ────────────────────────────────────────────────────────────
@@ -960,6 +1236,7 @@
     var root = document.getElementById('storage-state');
     if (!root) return;
     var active = data.active_counts || {};
+    var activeArchive = data.active_archive || {};
     var queue = data.queue_counts || {};
     var archives = data.archive_manifest || [];
     var rows = archives.map(function (r) {
@@ -971,13 +1248,15 @@
       '<div class="cards"><div class="card"><h3>active corpus</h3><dl class="kv">' +
       '<dt>items</dt><dd>' + fmt(active.items || 0) + '</dd>' +
       '<dt>embeddings</dt><dd>' + fmt(active.embeddings || 0) + '</dd>' +
-      '<dt>rules</dt><dd>' + fmt(active.rules || 0) + '</dd>' +
-      '<dt>queue</dt><dd>' + fmt(active.queue || 0) + '</dd></dl></div>' +
+      '<dt>archived items</dt><dd>' + fmt(data.archived_items || 0) + '</dd>' +
+      '<dt>archive cells</dt><dd>' + fmt(activeArchive.cell_count || 0) + '</dd>' +
+      '<dt>queued</dt><dd>' + fmt(queue.queued || 0) + '</dd></dl></div>' +
       '<div class="card"><h3>storage</h3><dl class="kv">' +
       '<dt>database</dt><dd>' + fmtBytes(data.db_bytes || 0) + '</dd>' +
-      '<dt>disk free</dt><dd>' + fmtBytes(data.disk_free_bytes || 0) + '</dd>' +
-      '<dt>disk used</dt><dd>' + pct(data.disk_used_ratio || 0) + '</dd>' +
-      '<dt>queued</dt><dd>' + fmt(queue.queued || 0) + '</dd></dl></div></div>' +
+      '<dt>physical free</dt><dd>' + fmtBytes(data.disk_free_bytes || 0) + '</dd>' +
+      '<dt>SQLite reusable</dt><dd>' + fmtBytes(data.sqlite_reusable_bytes || 0) + '</dd>' +
+      '<dt>effective free</dt><dd>' + fmtBytes(data.effective_free_bytes == null ? data.disk_free_bytes : data.effective_free_bytes) + '</dd>' +
+      '<dt>effective used</dt><dd>' + pct(data.effective_used_ratio == null ? data.disk_used_ratio : data.effective_used_ratio) + '</dd></dl></div></div>' +
       '<div class="card table-card"><h3>corpus archives</h3>' +
       (rows ? table(['year', 'items', 'embeddings', 'restore'], rows) :
         '<p class="muted">no corpus archives yet</p>') + '</div>';
