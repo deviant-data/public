@@ -99,10 +99,43 @@
     if (!inp) return;
     var results = document.getElementById('results');
     var t = null, ctrl = null;
+    var staticMode = window.location.pathname.indexOf('/pages/') !== -1;
+    var staticPages = null;
+    function loadStaticPages() {
+      if (staticPages) return Promise.resolve(staticPages);
+      return fetch('manifest.json', { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('manifest'); return r.json(); })
+        .then(function (manifest) {
+          return Promise.all((manifest.pages || []).filter(function (p) { return p.name !== 'search'; }).map(function (p) {
+            return fetch(p.file).then(function (r) { return r.text(); }).then(function (html) {
+              var doc = new DOMParser().parseFromString(html, 'text/html');
+              return { name: p.name, file: p.file, text: (doc.body && doc.body.textContent || '').replace(/\s+/g, ' ').trim() };
+            });
+          }));
+        })
+        .then(function (pages) { staticPages = pages; return pages; });
+    }
+    function renderStatic(q) {
+      loadStaticPages().then(function (pages) {
+        var needle = q.trim().toLowerCase();
+        var matches = !needle ? pages : pages.filter(function (p) { return p.text.toLowerCase().indexOf(needle) !== -1; });
+        results.innerHTML = matches.slice(0, 50).map(function (p) {
+          var at = needle ? p.text.toLowerCase().indexOf(needle) : 0;
+          var start = Math.max(0, at - 80);
+          return '<div class="card"><h3><a href="' + esc(p.file) + '">' + esc(p.name) +
+                 '</a></h3><p>' + esc(p.text.slice(start, start + 240)) + '</p></div>';
+        }).join('') || '<p class="muted">no static pages matched</p>';
+      }).catch(function () { results.innerHTML = '<p class="muted">static search index unavailable</p>'; });
+    }
     function fire() {
+      var q = inp.value;
+      if (staticMode) {
+        renderStatic(q);
+        history.replaceState(null, '', window.location.pathname + (q ? '?q=' + encodeURIComponent(q) : ''));
+        return;
+      }
       if (ctrl) ctrl.abort();
       ctrl = new AbortController();
-      var q = inp.value;
       var url = '/search?q=' + encodeURIComponent(q);
       fetch(url, { headers: { 'HX-Request': 'true' }, signal: ctrl.signal })
         .then(function (r) { return r.text(); })
@@ -154,8 +187,11 @@
              Number(r.score || 0).toFixed(4) + '</td><td>' + esc(r.component) + '</td></tr>';
     }).join('');
     var runs = (data.runs || []).map(function (r) {
-      var ok = r.last_exit === 0, bad = r.last_exit && r.last_exit !== 0;
-      return '<tr><td>' + esc(r.stage) + '</td><td>' + esc(r.last_started || '-') +
+      var exitCode = r.last_exit;
+      if (exitCode === undefined || exitCode === null) exitCode = r.exit_code;
+      var started = r.last_started || r.started_at;
+      var ok = exitCode === 0, bad = exitCode !== undefined && exitCode !== null && exitCode !== 0;
+      return '<tr><td>' + esc(r.stage) + '</td><td>' + esc(started || '-') +
              '</td><td class="exit-cell"><span class="tag ' + (ok ? 'ok' : bad ? 'bad' : 'warn') + '">' +
              (ok ? 'ok' : bad ? 'fail' : '-') + '</span></td></tr>';
     }).join('');
@@ -308,8 +344,11 @@
     if (!root || !data) return;
     var s = data.storage || {};
     var frameRows = (data.frames || []).map(function (r) {
-      var href = r.kind === 'overview' ? '/?replay=1&run_id=' + r.run_id :
-        '/' + r.kind + '?replay=1&run_id=' + r.run_id;
+      var isStatic = window.location.pathname.indexOf('/pages/') !== -1;
+      var href = isStatic
+        ? (r.kind === 'overview' ? 'overview.html' : r.kind + '.html') + '?replay=1&run_id=' + r.run_id
+        : (r.kind === 'overview' ? '/?replay=1&run_id=' + r.run_id :
+          '/' + r.kind + '?replay=1&run_id=' + r.run_id);
       return '<tr><td>' + esc(r.kind) + '</td><td>' + esc(r.run_id) + '</td><td>' +
              esc(r.ts) + '</td><td>' + fmt(r.bytes || 0) + '</td><td><a href="' + href + '">open</a></td></tr>';
     }).join('');
@@ -318,8 +357,11 @@
              esc(r.compression_pass) + '</td><td>' + fmt(r.frame_count || 0) + '</td><td>' +
              fmt(r.bytes || 0) + '</td><td>' + esc(r.packed_at || '') + '</td></tr>';
     }).join('');
-    root.innerHTML = '<div class="card"><h3>storage</h3><dl class="kv"><dt>database</dt><dd class="cyan">' +
-      fmtBytes(s.db_bytes || 0) + '</dd><dt>frames</dt><dd>' + fmt(s.history_frame_count || 0) +
+    root.innerHTML = '<div class="card"><h3>replay storage</h3><dl class="kv"><dt>history payloads</dt><dd class="cyan">' +
+      fmtBytes(s.history_payload_bytes == null ? s.db_bytes : s.history_payload_bytes) +
+      '</dd><dt>SQLite reusable pages</dt><dd>' +
+      fmtBytes(s.sqlite_reusable_page_bytes == null ? s.free_bytes : s.sqlite_reusable_page_bytes) +
+      '</dd><dt>frames</dt><dd>' + fmt(s.history_frame_count || 0) +
       '</dd><dt>history archives</dt><dd>' + fmtBytes(s.history_archive_bytes || 0) +
       '</dd><dt>corpus archives</dt><dd>' + fmtBytes(s.corpus_archive_bytes || 0) +
       '</dd><dt>soft used</dt><dd>' + pct(s.soft_warning_used || 0) +
@@ -1413,7 +1455,159 @@
       '</div><div class="table-card">' + table(['bridge from', 'bridge to'], bridges) + '</div></div>';
   }
 
-  function startReplay(kind, liveData, render) { return; }
+  function startReplay(kind, liveData, render) {
+    // v5 note: replay is opt-in per view. It fetches compact history frames
+    // and never mutates live dashboard data.
+    var box = document.querySelector('[data-replay="' + kind + '"]');
+    if (!box) return;
+    var btnLive = box.querySelector('[data-replay-live]');
+    var btnPlay = box.querySelector('[data-replay-play]');
+    var scrub = box.querySelector('[data-replay-scrub]');
+    var speed = box.querySelector('[data-replay-speed]');
+    var status = box.querySelector('[data-replay-status]');
+    var liveUrl = box.getAttribute('data-replay-live-url') || ('/' + kind);
+    var replayBase = box.getAttribute('data-replay-base-url') || ('/' + kind + '?replay=1&run_id=');
+    var currentRun = box.getAttribute('data-replay-current-run');
+    var staticMode = window.location.pathname.indexOf('/pages/') !== -1;
+    var frames = [], timer = null, idx = 0;
+    // inReplay tracks whether the URL is already on a replay state. First
+    // transition between live and replay uses pushState so the back button
+    // works; subsequent same-mode updates use replaceState so the slider
+    // doesn't spam the history stack.
+    var inReplay = window.location.search.indexOf('replay=1') !== -1;
+    function setStatus(s) { if (status) status.textContent = s; }
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      if (btnPlay) btnPlay.textContent = 'play';
+    }
+    function tick() {
+      timer = setInterval(function () {
+        showFrame(idx);
+        idx = (idx + 1) % frames.length;
+      }, Number(speed && speed.value || 1200));
+    }
+    function showFrame(i) {
+      if (!frames.length) return;
+      idx = Math.max(0, Math.min(frames.length - 1, i));
+      if (scrub) scrub.value = String(idx);
+      var f = frames[idx];
+      if (staticMode && f.payload) {
+        render(f.payload);
+        setStatus('batch ' + f.run_id + ' · ' + f.ts);
+        if (window.history) {
+          window.history.replaceState(null, '', window.location.pathname +
+            '?replay=1&run_id=' + encodeURIComponent(f.run_id));
+          inReplay = true;
+        }
+        return;
+      }
+      fetch('/history/frame?kind=' + encodeURIComponent(kind) + '&run_id=' + encodeURIComponent(f.run_id))
+        .then(function (r) {
+          // 410 Gone: frame was archived/pruned. Skip ahead instead of stopping.
+          if (r.status === 410) {
+            setStatus('frame ' + f.run_id + ' gone — skipping');
+            idx = (idx + 1) % frames.length;
+            return null;
+          }
+          return r.json();
+        })
+        .then(function (j) {
+          if (!j || !j.payload) return;
+          render(j.payload);
+          setStatus('run ' + j.run_id + ' · ' + j.ts);
+          if (window.history) {
+            var url = replayBase + j.run_id;
+            if (inReplay) {
+              window.history.replaceState(null, '', url);
+            } else {
+              window.history.pushState(null, '', url);
+              inReplay = true;
+            }
+          }
+        })
+        .catch(function () { setStatus('replay fetch failed'); stop(); });
+    }
+    function acceptFrames(nextFrames) {
+        frames = nextFrames.slice().reverse();
+        if (currentRun) {
+          frames.forEach(function (f, i) { if (String(f.run_id) === String(currentRun)) idx = i; });
+        } else {
+          idx = Math.max(frames.length - 1, 0);
+        }
+        if (scrub) {
+          scrub.max = String(Math.max(frames.length - 1, 0));
+          scrub.value = String(idx);
+        }
+        if (!frames.length) setStatus('no frames yet');
+    }
+    if (staticMode) {
+      Promise.all(['../state/previous.json', '../state/latest.json'].map(function (url) {
+        return fetch(url, { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      })).then(function (states) {
+        var next = [];
+        states.forEach(function (state) {
+          if (!state) return;
+          (state.views || []).forEach(function (view) {
+            if (view.kind === kind) {
+              next.push({ run_id: state.batchId, ts: view.ts || state.generatedAt, payload: view.data });
+            }
+          });
+        });
+        acceptFrames(next);
+      });
+    } else {
+      fetch('/history/frames?kind=' + encodeURIComponent(kind))
+        .then(function (r) { return r.json(); })
+        .then(function (j) { acceptFrames(j.frames || []); })
+        .catch(function () { setStatus('history unavailable'); });
+    }
+    if (btnLive) btnLive.addEventListener('click', function () {
+      stop();
+      if (staticMode) {
+        render(liveData);
+        setStatus('live');
+        if (window.history) window.history.pushState(null, '', window.location.pathname);
+        inReplay = false;
+        return;
+      }
+      if (window.location.search.indexOf('replay=1') !== -1) {
+        window.location.href = liveUrl;
+        return;
+      }
+      render(liveData);
+      setStatus('live');
+      if (window.history) {
+        if (inReplay) {
+          window.history.pushState(null, '', liveUrl);
+          inReplay = false;
+        } else {
+          window.history.replaceState(null, '', liveUrl);
+        }
+      }
+    });
+    if (scrub) scrub.addEventListener('input', function () {
+      stop();
+      showFrame(Number(scrub.value || 0));
+    });
+    if (btnPlay) btnPlay.addEventListener('click', function () {
+      if (!frames.length) return;
+      if (timer) { stop(); return; }
+      btnPlay.textContent = 'pause';
+      tick();
+    });
+    if (speed) speed.addEventListener('change', function () {
+      // Restart the interval directly rather than re-entering the play handler
+      // via btnPlay.click() — that round-trip can leak a second interval if
+      // the click event is buffered while clearInterval is in flight.
+      if (!timer) return;
+      clearInterval(timer);
+      timer = null;
+      tick();
+    });
+  }
 
   function fmt(n) { return Number(n || 0).toLocaleString(); }
   function pct(n) { return (Number(n || 0) * 100).toFixed(1) + '%'; }
